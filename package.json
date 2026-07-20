@@ -22,7 +22,7 @@
     "./relay": {
       "types": "./src/relay.d.ts",
       "import": "./src/relay.js"
-    },
+    }
   },
   "scripts": {
     "start": "node ./bin/p2p-nc.js",
