@@ -14,6 +14,7 @@ CSS, JavaScript, Web Worker, Service Worker, manifest и изображений.
 
 - подключение к CLI-серверу по `PeerId` и логическому порту;
 - автоматический поиск через HTTP Delegated Routing и IPFS Amino DHT;
+- прямой Trystero/WebRTC fallback через публичные WebTorrent trackers;
 - WebTransport или WebSocket/WSS через libp2p Circuit Relay v2;
 - необязательный ручной relay multiaddr как аварийный override;
 - Noise-шифрование и Yamux внутри отдельного Web Worker;
@@ -28,14 +29,16 @@ Web Worker импортирует browser-safe пакет
 [`@santaklouse/p2p-netcat-core`](../packages/core/README.RU.md), который одновременно использует CLI.
 Общими являются protocol ID, проверка PeerId и логического порта, правила
 WS/WSS и построение Circuit Relay dial plan. В самом веб-проекте остаются
-Delegated Routing, DHT-клиент, libp2p WebTransport/WebSocket-транспорты, обмен
-сообщениями с Worker, терминальный интерфейс и PWA/Service Worker. Серверного
-JavaScript-кода у этой архитектуры нет.
+Delegated Routing, DHT-клиент, libp2p WebTransport/WebSocket-транспорты,
+Trystero/WebRTC, обмен сообщениями с Worker, терминальный интерфейс и
+PWA/Service Worker. Серверного JavaScript-кода у этой архитектуры нет.
 
-При пустом поле relay Worker сначала запрашивает адрес PeerId через
-`https://delegated-ipfs.dev/routing/v1`, затем использует DHT как fallback.
-Успешный маршрут кешируется в IndexedDB на 24 часа и проверяется первым при
-следующем подключении. Файл `public/network-config.json` позволяет добавить
+При пустом поле relay одновременно запускаются Trystero/WebRTC и Worker. Worker
+сначала запрашивает адрес PeerId через `https://delegated-ipfs.dev/routing/v1`,
+затем использует DHT как fallback. Первый аутентифицированный канал побеждает.
+Успешный libp2p-маршрут кешируется в IndexedDB на 24 часа. WebRTC-сервер
+аутентифицируется подписанным Ed25519 challenge, соответствующим введённому
+PeerId. Файл `public/network-config.json` позволяет добавить
 другие совместимые routing endpoint и скрытый пул WSS relay без изменения
 интерфейса:
 
@@ -90,7 +93,7 @@ https://santaklouse.github.io/p2p-netcat-js/
 ```
 
 GitHub Pages предоставляет HTTPS, поэтому Service Worker, установка PWA,
-Delegated Routing и защищённые WSS/WebTransport-маршруты будут работать.
+Delegated Routing, WebRTC и защищённые WSS/WebTransport-маршруты будут работать.
 
 ## Проверяемый ручной relay-маршрут
 

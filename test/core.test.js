@@ -3,11 +3,19 @@ import assert from 'node:assert/strict'
 import { mkdtemp, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { generateKeyPair } from '@libp2p/crypto/keys'
-import { peerIdFromPrivateKey } from '@libp2p/peer-id'
+import { generateKeyPair, publicKeyFromProtobuf, publicKeyToProtobuf } from '@libp2p/crypto/keys'
+import { peerIdFromPrivateKey, peerIdFromPublicKey } from '@libp2p/peer-id'
 import { createP2PNode } from '../src/node.js'
 import { loadOrCreateIdentity } from '../src/identity.js'
-import { preferDialAddresses, protocolForService, relayedTargetAddress, validateService } from '@santaklouse/p2p-netcat-core'
+import {
+  decodeTrysteroAuthResponse,
+  encodeTrysteroAuthResponse,
+  preferDialAddresses,
+  protocolForService,
+  relayedTargetAddress,
+  trysteroAuthPayload,
+  validateService
+} from '@santaklouse/p2p-netcat-core'
 
 test('логический порт валидируется и преобразуется в protocol id', () => {
   assert.equal(validateService('8080'), 8080)
@@ -45,6 +53,22 @@ test('QUIC имеет приоритет перед TCP, а relay остаётс
 
   assert.ok(preferDialAddresses(quicAddress, tcpAddress) < 0)
   assert.ok(preferDialAddresses(tcpAddress, relayAddress) < 0)
+})
+
+test('Trystero challenge криптографически привязан к ожидаемому PeerId', async () => {
+  const privateKey = await generateKeyPair('Ed25519')
+  const peerId = peerIdFromPrivateKey(privateKey).toString()
+  const challenge = crypto.getRandomValues(new Uint8Array(32))
+  const payload = trysteroAuthPayload(peerId, 31337, challenge)
+  const frame = encodeTrysteroAuthResponse(
+    publicKeyToProtobuf(privateKey.publicKey),
+    await privateKey.sign(payload)
+  )
+  const response = decodeTrysteroAuthResponse(frame)
+  const publicKey = publicKeyFromProtobuf(response.publicKey)
+  assert.equal(peerIdFromPublicKey(publicKey).toString(), peerId)
+  assert.equal(await publicKey.verify(payload, response.signature), true)
+  assert.equal(await publicKey.verify(trysteroAuthPayload(peerId, 31338, challenge), response.signature), false)
 })
 
 test('два локальных узла передают двунаправленный бинарный поток', async () => {

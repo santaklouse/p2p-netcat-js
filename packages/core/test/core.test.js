@@ -1,11 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  TrysteroStream,
   browserDialableAddress,
   createRelayDialPlan,
+  decodeTrysteroAuthResponse,
+  encodeTrysteroAuthResponse,
   normalizeRelayAddress,
   preferDialAddresses,
   protocolForService,
+  trysteroAuthPayload,
+  trysteroRoomId,
   validateService
 } from '../src/index.js'
 
@@ -47,4 +52,35 @@ test('общая сортировка предпочитает WebRTC и QUIC, r
   assert.ok(preferDialAddresses('/ip4/127.0.0.1/udp/1/webrtc-direct', '/ip4/127.0.0.1/udp/1/quic-v1') < 0)
   assert.ok(preferDialAddresses('/ip4/127.0.0.1/udp/1/quic-v1', '/ip4/127.0.0.1/tcp/1') < 0)
   assert.ok(preferDialAddresses('/ip4/127.0.0.1/tcp/1', '/ip4/127.0.0.1/tcp/2/ws/p2p/relay/p2p-circuit') < 0)
+})
+
+test('Trystero room и authentication frame детерминированы', async () => {
+  const targetId = '12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9'
+  const challenge = new Uint8Array(32).fill(7)
+  assert.equal(trysteroRoomId(targetId, 31337), `${targetId}:31337`)
+  assert.ok(trysteroAuthPayload(targetId, 31337, challenge).byteLength > challenge.byteLength)
+  const encoded = encodeTrysteroAuthResponse(new Uint8Array([1, 2, 3]), new Uint8Array([4, 5]))
+  const decoded = decodeTrysteroAuthResponse(encoded)
+  assert.deepEqual([...decoded.publicKey], [1, 2, 3])
+  assert.deepEqual([...decoded.signature], [4, 5])
+})
+
+test('Trystero stream сохраняет порядок, backpressure и EOF', async () => {
+  const sent = []
+  const controls = []
+  const stream = new TrysteroStream({
+    sendData: async bytes => sent.push([...bytes]),
+    sendControl: async control => controls.push(control)
+  })
+  assert.equal(stream.send(new Uint8Array([1, 2])), false)
+  await stream.onDrain()
+  assert.deepEqual(sent, [[1, 2]])
+  stream.receiveData(new Uint8Array([3, 4]))
+  stream.receiveControl('eof')
+  const received = []
+  for await (const bytes of stream) received.push([...bytes])
+  assert.deepEqual(received, [[3, 4]])
+  await stream.close()
+  assert.deepEqual(controls, ['eof'])
+  assert.equal(stream.status, 'closed')
 })

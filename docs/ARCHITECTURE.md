@@ -113,6 +113,14 @@ When the manual relay field is empty:
 Delegated Routing and DHT are sequential fallback layers. The dial attempts for
 the resulting candidate multiaddrs are the parallel part.
 
+Trystero/WebRTC runs in parallel with the complete libp2p branch. Server and
+client join a deterministic room derived from `PeerId + logical port`; public
+WebTorrent trackers carry SDP/ICE signaling only. Before application data is
+accepted, the client sends a random 32-byte challenge. The CLI server signs a
+domain-separated transcript with its persistent Ed25519 key; the client checks
+the signature and derives the expected PeerId from the supplied public key.
+The first authenticated libp2p or WebRTC channel cancels the losing attempt.
+
 If a manual relay is supplied, automatic discovery is skipped. The core package
 requires a relay PeerId, WS/WSS transport, and WSS for an HTTPS page, then builds
 the final Circuit Relay route.
@@ -151,7 +159,9 @@ unless the peer is locally reachable.
 - PeerId alone cannot guarantee reachability when the peer is offline, has not
   published an address, or is behind NAT without a working relay reservation.
 - Browsers cannot dial ordinary TCP or Node.js QUIC multiaddrs.
-- WebRTC/Trystero discovery is not yet part of the transport pipeline.
+- WebRTC cannot guarantee traversal of symmetric NAT; without reachable TURN,
+  Circuit Relay remains the fallback.
+- Public WebTorrent trackers may be unavailable and provide no SLA.
 - Public IPFS peers do not guarantee arbitrary Circuit Relay capacity.
 - There is no PeerId allowlist or application authorization layer yet.
 - Netcat-style UDP datagrams are not implemented; QUIC still carries a reliable
@@ -172,4 +182,3 @@ unless the peer is locally reachable.
 | `web/app/p2p.worker.ts` | Browser libp2p, discovery, route race, and cache |
 | `web/public/network-config.json` | Static routing endpoints and relay pool |
 | `web/vite.config.ts` | Static build and PWA configuration |
-

@@ -25,6 +25,7 @@ Amino DHT, mDNS, and Circuit Relay v2.
 - Logical ports, allowing one PeerId to expose multiple services;
 - PeerId-only discovery on a LAN through mDNS and over the internet through the
   IPFS Amino DHT;
+- a direct Trystero/WebRTC fallback signalled through public WebTorrent trackers;
 - Circuit Relay v2 connections for nodes behind NAT;
 - A built-in relay mode;
 - `-l`, `-k`, `-w`, `-q`, `-z`, `-e`, `-p`, `-4`, `-6`, and verbose mode;
@@ -172,10 +173,10 @@ Pages. In the repository settings, select **Settings → Pages → Source → Gi
 Actions**. The workflow automatically uses the repository subpath as Vite's
 base URL.
 
-The browser does not require a relay address by default. It queries HTTP
-Delegated Routing first, falls back to the IPFS Amino DHT when no suitable
-address is returned, keeps only browser-usable WSS/WebTransport/Circuit Relay
-routes, and dials the resulting candidates concurrently.
+The browser does not require a relay address by default. It starts two paths in
+parallel: Trystero/WebRTC through public WebTorrent trackers, and libp2p lookup
+through HTTP Delegated Routing with IPFS Amino DHT fallback. The first
+authenticated channel wins. Discovered libp2p multiaddrs are also raced.
 
 If the server advertises only TCP/QUIC addresses or automatic discovery cannot
 find a usable route, expand the advanced settings and provide a WebSocket relay:
@@ -255,8 +256,10 @@ p2p-nc relay --help
 3. The server publishes a provider record for its PeerId CID to the Amino DHT.
 4. The client searches known addresses, mDNS, that provider record, and the DHT.
 5. With `--relay`, it builds a `relay/p2p-circuit/p2p/server` route.
-6. QUIC TLS 1.3 or Noise authenticates the PeerIds and establishes encryption.
-7. stdin/stdout is transferred as a raw byte stream with backpressure.
+6. Without an explicit route, a direct Trystero/WebRTC channel is attempted in
+   parallel.
+7. QUIC TLS 1.3, Noise, or a signed WebRTC challenge authenticates the PeerId.
+8. stdin/stdout is transferred as a raw byte stream with backpressure.
 
 The [architecture document](docs/ARCHITECTURE.md) describes every CLI and
 browser branch, timeout, cache, concurrent address race, and trust boundary in
@@ -272,6 +275,8 @@ QUIC streams, avoiding unnecessary HTTP request, header, and CONNECT semantics.
   may take about a minute; `-v` reports when it succeeds.
 - Servers behind CGNAT must use an available Circuit Relay v2. The most reliable
   option is to pass the same `--relay` to both the server and client.
+- WebRTC improves direct connectivity, but symmetric NAT or blocked UDP may
+  still require TURN or Circuit Relay; public trackers provide no SLA.
 - An IPFS HTTP gateway is not a relay and cannot carry this protocol.
 - Networks that block UDP automatically fall back to TCP when both addresses
   are known; `--no-quic` disables QUIC explicitly.

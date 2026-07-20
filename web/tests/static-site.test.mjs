@@ -23,9 +23,10 @@ test("собирается как статическая PWA без сервер
 });
 
 test("сетевой стек работает в отдельном Web Worker", async () => {
-  const [worker, client, core, page] = await Promise.all([
+  const [worker, client, trystero, core, page] = await Promise.all([
     readFile(new URL("../app/p2p.worker.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/p2p-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/trystero-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../../packages/core/src/index.js", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   ]);
@@ -40,6 +41,10 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(worker, /kadDHT\(/);
   assert.match(worker, /indexedDB\.open/);
   assert.match(client, /new Worker\(new URL/);
+  assert.match(client, /Promise\.any/);
+  assert.match(trystero, /@trystero-p2p\/torrent/);
+  assert.match(trystero, /trysteroAuthPayload/);
+  assert.match(trystero, /peerIdFromPublicKey/);
   assert.match(client, /transfer/);
   assert.match(page, /Необязательно · используется автопоиск/);
   assert.doesNotMatch(page, /!targetPeerId \|\| !relayAddress/);

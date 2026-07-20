@@ -250,6 +250,14 @@ flowchart TD
 Delegated Routing и DHT являются последовательными fallback-уровнями. Именно
 проверка нескольких найденных multiaddr выполняется параллельно.
 
+Параллельно со всей libp2p-веткой запускается Trystero/WebRTC. Сервер и клиент
+входят в детерминированную room из `PeerId + логический порт`, используя
+публичные WebTorrent trackers только для SDP/ICE signaling. До допуска канала
+к данным клиент отправляет случайный 32-байтовый challenge. CLI-сервер подписывает
+domain-separated transcript постоянным Ed25519-ключом; клиент проверяет подпись
+и выводит PeerId из переданного публичного ключа. Первый успешно
+аутентифицированный libp2p или WebRTC-канал отменяет проигравшую попытку.
+
 ### Ручной relay
 
 Если пользователь раскрыл дополнительные настройки и ввёл relay multiaddr,
@@ -396,6 +404,7 @@ PeerId не содержит текущий IP-адрес. Поэтому абс
 - LAN: mDNS;
 - CLI через интернет: provider record и Amino DHT;
 - браузер: кеш, Delegated Routing, затем Amino DHT;
+- CLI и браузер: параллельный Trystero/WebRTC через WebTorrent signaling;
 - NAT/CGNAT: Circuit Relay v2;
 - точная диагностика: полный multiaddr или ручной relay.
 
@@ -422,9 +431,10 @@ PeerId не содержит текущий IP-адрес. Поэтому абс
 
 - UDP-датаграммы netcat `-u` не реализованы; QUIC предоставляет надёжный поток.
 - Браузер не умеет набирать обычный TCP и Node.js QUIC multiaddr.
-- WebRTC/Trystero discovery пока не встроен в transport pipeline.
+- WebRTC не гарантирует прохождение symmetric NAT; без доступного TURN остаётся
+  fallback через Circuit Relay.
+- Публичные WebTorrent trackers могут быть недоступны и не предоставляют SLA.
 - Публичные IPFS-узлы не гарантируют relay для произвольного трафика.
 - Нет allowlist PeerId и прикладной авторизации поверх libp2p identity.
 - IPFS HTTP gateway не является транспортом или Circuit Relay.
 - PWA не превращает сетевой P2P-сеанс в офлайн-функцию.
-

@@ -6,6 +6,7 @@ import { DEFAULT_SERVICE, protocolForService, validateService } from '@santaklou
 import { APP_VERSION, IPFS_BOOTSTRAP_PEERS } from './constants.js'
 import { bridgeSession, execSession } from './session.js'
 import { advertiseSelf, resolveTarget } from './discovery.js'
+import { connectTrystero, startTrysteroListener } from './trystero.js'
 
 function integer (value, previous) {
   const number = Number(value)
@@ -85,6 +86,7 @@ function commonNodeOptions (command) {
     .option('--no-dht', 'не подключаться к публичной IPFS Amino DHT')
     .option('--no-mdns', 'отключить обнаружение соседей в локальной сети')
     .option('--no-quic', 'отключить QUIC и использовать TCP/relay')
+    .option('--no-webrtc', 'отключить прямой Trystero/WebRTC fallback')
     .option('--json', 'выводить сведения об узле в JSON в stderr')
     .option('-v, --verbose', 'подробная диагностика в stderr')
 }
@@ -130,13 +132,13 @@ async function runListener (target, serviceArgument, options) {
   const firstSession = new Promise((resolve, reject) => { completed = { resolve, reject } })
   let handled = false
 
-  await node.handle(protocol, async (stream, connection) => {
+  const handleIncoming = async (stream, remotePeer) => {
     if (handled && !options.keepOpen) {
       stream.abort(new Error('Слушатель принимает только одно подключение'))
       return
     }
     handled = true
-    stderr(`[p2p-nc] подключен ${connection.remotePeer} к логическому порту ${service}`)
+    stderr(`[p2p-nc] подключен ${remotePeer} к логическому порту ${service}`)
 
     try {
       if (options.exec != null) {
@@ -151,10 +153,23 @@ async function runListener (target, serviceArgument, options) {
     } catch (error) {
       completed.reject(error)
     }
+  }
+
+  await node.handle(protocol, async (stream, connection) => {
+    await handleIncoming(stream, connection.remotePeer)
   }, {
     maxInboundStreams: 1,
     runOnLimitedConnection: true
   })
+
+  const trysteroListener = options.webrtc === false
+    ? null
+    : startTrysteroListener({
+        privateKey,
+        service,
+        verbose: options.verbose,
+        onStream: (stream, remotePeer) => void handleIncoming(stream, `webrtc:${remotePeer}`)
+      })
 
   printNodeInfo(node, { json: options.json, label: `слушатель:${service}` })
   stderr(`[p2p-nc] постоянный ключ: ${identityPath}`)
@@ -176,6 +191,7 @@ async function runListener (target, serviceArgument, options) {
   } finally {
     advertiseController.abort()
     await advertiseTask.catch(() => {})
+    await trysteroListener?.close().catch(() => {})
     removeSignalHandlers()
     await node.stop()
   }
@@ -191,19 +207,42 @@ async function runClient (target, serviceArgument, options) {
   const node = await createP2PNode(nodeOptionsFrom(options, { privateKey }))
   const removeSignalHandlers = installShutdown(node)
   const timeoutMs = options.timeout * 1000
+  const libp2pController = new AbortController()
+  let trysteroAttempt
 
   try {
     if (options.verbose) printNodeInfo(node, { json: options.json, label: 'клиент' })
-    const dialTarget = await resolveTarget(node, target, {
-      relays: options.relay,
-      timeoutMs,
-      verbose: options.verbose
-    })
-    const stream = await node.dialProtocol(dialTarget, protocolForService(service), {
-      signal: AbortSignal.timeout(timeoutMs),
-      runOnLimitedConnection: true
-    })
+    const libp2pAttempt = (async () => {
+      const dialTarget = await resolveTarget(node, target, {
+        relays: options.relay,
+        timeoutMs,
+        verbose: options.verbose,
+        signal: libp2pController.signal
+      })
+      return node.dialProtocol(dialTarget, protocolForService(service), {
+        signal: AbortSignal.any([libp2pController.signal, AbortSignal.timeout(timeoutMs)]),
+        runOnLimitedConnection: true
+      })
+    })()
+
+    const useTrystero = options.webrtc !== false && !target.startsWith('/') && options.relay.length === 0
+    if (useTrystero) trysteroAttempt = connectTrystero({ peerId: target, service, timeoutMs, verbose: options.verbose })
+    let winner
+    try {
+      winner = await Promise.any([
+        libp2pAttempt.then(stream => ({ transport: 'libp2p', stream })),
+        ...(trysteroAttempt == null ? [] : [trysteroAttempt.promise.then(stream => ({ transport: 'Trystero/WebRTC', stream }))])
+      ])
+    } catch (error) {
+      const reasons = error instanceof AggregateError ? error.errors.map(item => item.message).join('; ') : error.message
+      throw new Error(`Ни один транспорт не установил соединение: ${reasons}`, { cause: error })
+    }
+
+    if (winner.transport === 'libp2p') await trysteroAttempt?.close().catch(() => {})
+    else libp2pController.abort(new Error('Выбран более быстрый Trystero/WebRTC-канал'))
+    const stream = winner.stream
     if (options.verbose || options.zero) stderr(`[p2p-nc] соединение с ${target}:${service} установлено`)
+    if (options.verbose) stderr(`[p2p-nc] выбран транспорт: ${winner.transport}`)
     if (options.zero) {
       await stream.close()
       return
@@ -214,6 +253,8 @@ async function runClient (target, serviceArgument, options) {
       inactivityTimeoutMs: options.timeoutExplicit ? timeoutMs : 0
     })
   } finally {
+    libp2pController.abort(new Error('Клиент завершён'))
+    await trysteroAttempt?.close().catch(() => {})
     removeSignalHandlers()
     await node.stop()
   }

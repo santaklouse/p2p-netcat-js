@@ -14,6 +14,7 @@ HTML, CSS, JavaScript, a Web Worker, a Service Worker, a manifest, and images.
 
 - connection to a CLI server by `PeerId` and logical port;
 - automatic lookup through HTTP Delegated Routing and IPFS Amino DHT;
+- direct Trystero/WebRTC fallback through public WebTorrent trackers;
 - WebTransport or WebSocket/WSS through libp2p Circuit Relay v2;
 - an optional manual relay multiaddr as an emergency override;
 - Noise encryption and Yamux inside a dedicated Web Worker;
@@ -28,14 +29,16 @@ The Web Worker imports the browser-safe
 [`@santaklouse/p2p-netcat-core`](../packages/core) package also used by the CLI.
 Protocol IDs, PeerId and logical-port validation, WS/WSS rules, and Circuit
 Relay dial-plan construction are shared. Delegated Routing, the DHT client,
-libp2p WebTransport/WebSocket transports, Worker messaging, the terminal UI,
-and the PWA/Service Worker remain in the web project. This architecture runs no
-server-side JavaScript.
+libp2p WebTransport/WebSocket transports, Trystero/WebRTC, Worker messaging,
+the terminal UI, and the PWA/Service Worker remain in the web project. This
+architecture runs no server-side JavaScript.
 
-When the relay field is empty, the Worker first resolves the PeerId through
-`https://delegated-ipfs.dev/routing/v1` and then uses DHT as a fallback. A
-successful route is cached in IndexedDB for 24 hours and checked first on the
-next connection. `public/network-config.json` can add compatible routing
+When the relay field is empty, Trystero/WebRTC and the Worker start
+simultaneously. The Worker resolves the PeerId through
+`https://delegated-ipfs.dev/routing/v1` and then uses DHT as a fallback. The
+first authenticated channel wins. A successful libp2p route is cached in
+IndexedDB for 24 hours. The WebRTC server proves the entered PeerId with a
+signed Ed25519 challenge. `public/network-config.json` can add compatible routing
 endpoints and a hidden WSS relay pool without changing the UI:
 
 ```json
@@ -88,7 +91,7 @@ https://santaklouse.github.io/p2p-netcat-js/
 ```
 
 GitHub Pages supplies HTTPS, allowing the Service Worker, PWA installation,
-Delegated Routing, and secure WSS/WebTransport routes to work.
+Delegated Routing, WebRTC, and secure WSS/WebTransport routes to work.
 
 ## Verifiable manual relay route
 

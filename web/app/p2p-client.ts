@@ -1,5 +1,7 @@
 "use client";
 
+import { BrowserTrysteroClient } from "./trystero-client";
+
 export type ClientEvents = {
   onData: (bytes: Uint8Array) => void;
   onLog: (message: string, kind?: "info" | "success" | "error") => void;
@@ -24,7 +26,7 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-export class BrowserP2PClient {
+class WorkerP2PClient {
   private readonly worker: Worker;
   private readonly events: ClientEvents;
   private readonly pending = new Map<number, PendingRequest>();
@@ -91,6 +93,14 @@ export class BrowserP2PClient {
     }
   }
 
+  cancel() {
+    if (this.stopped) return;
+    this.stopped = true;
+    this.worker.terminate();
+    for (const request of this.pending.values()) request.reject(new Error("Web Worker остановлен"));
+    this.pending.clear();
+  }
+
   private request<T = void>(action: WorkerRequest["action"], payload?: Record<string, unknown>, transfer: Transferable[] = []) {
     if (this.stopped && action !== "stop") return Promise.reject(new Error("Клиент уже остановлен"));
     const id = ++this.requestId;
@@ -125,3 +135,84 @@ export class BrowserP2PClient {
   }
 }
 
+export class BrowserP2PClient {
+  private readonly events: ClientEvents;
+  private readonly worker: WorkerP2PClient;
+  private trystero: BrowserTrysteroClient | null = null;
+  private active: "worker" | "trystero" | null = null;
+
+  constructor(events: ClientEvents) {
+    this.events = events;
+    this.worker = new WorkerP2PClient(events);
+  }
+
+  start() {
+    return this.worker.start();
+  }
+
+  async connect(targetPeerId: string, logicalPort: number, relayAddress: string) {
+    if (relayAddress.trim()) {
+      await this.worker.connect(targetPeerId, logicalPort, relayAddress);
+      this.active = "worker";
+      this.events.onLog("Выбран указанный libp2p relay", "success");
+      return;
+    }
+
+    const trystero = new BrowserTrysteroClient(this.events);
+    this.trystero = trystero;
+    try {
+      const winner = await Promise.any([
+        this.worker.connect(targetPeerId, logicalPort, "").then(() => "worker" as const),
+        trystero.connect(targetPeerId, logicalPort).then(() => "trystero" as const),
+      ]);
+      this.active = winner;
+      if (winner === "worker") {
+        await trystero.stop();
+        this.trystero = null;
+        this.events.onLog("Выбран libp2p IPFS-маршрут", "success");
+      } else {
+        this.worker.cancel();
+        this.events.onLog("Выбран прямой Trystero/WebRTC-канал", "success");
+      }
+    } catch (error) {
+      await trystero.stop();
+      this.trystero = null;
+      const reasons = error instanceof AggregateError
+        ? error.errors.map((item) => item instanceof Error ? item.message : String(item)).join("; ")
+        : error instanceof Error ? error.message : String(error);
+      throw new Error(`Ни один транспорт не установил соединение: ${reasons}`, { cause: error });
+    }
+  }
+
+  async send(bytes: Uint8Array) {
+    if (this.active === "trystero") return this.trystero!.send(bytes);
+    return this.worker.send(bytes);
+  }
+
+  async sendText(text: string) {
+    await this.send(new TextEncoder().encode(text));
+  }
+
+  async sendFile(file: File, onProgress: (sent: number, total: number) => void) {
+    const reader = file.stream().getReader();
+    let sent = 0;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      await this.send(value);
+      sent += value.byteLength;
+      onProgress(sent, file.size);
+    }
+  }
+
+  async closeWrite() {
+    if (this.active === "trystero") return this.trystero!.closeWrite();
+    return this.worker.closeWrite();
+  }
+
+  async stop() {
+    await Promise.allSettled([this.worker.stop(), this.trystero?.stop() ?? Promise.resolve()]);
+    this.active = null;
+    this.trystero = null;
+  }
+}

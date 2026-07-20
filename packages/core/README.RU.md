@@ -35,6 +35,11 @@ JavaScript-клиентами.
 | `browserDialableAddress(address, options)` | Проверяет пригодность адреса для браузера |
 | `addressRank(address)` | Возвращает числовой приоритет транспорта |
 | `preferDialAddresses(a, b)` | Comparator для сортировки multiaddr |
+| `trysteroRoomId(peerId, service)` | Строит детерминированную WebRTC room |
+| `trysteroAuthPayload(...)` | Строит подписываемый challenge с domain separation |
+| `encodeTrysteroAuthResponse(...)` | Кодирует публичный ключ и подпись |
+| `decodeTrysteroAuthResponse(...)` | Проверяет и декодирует ответ |
+| `TrysteroStream` | Адаптирует action-канал к потоку с backpressure и EOF |
 
 Приоритет сортировки: WebRTC Direct, QUIC v1, WebTransport, WSS, WS, TCP,
 прочие адреса и Circuit Relay. Наличие позиции в общем рейтинге не означает,

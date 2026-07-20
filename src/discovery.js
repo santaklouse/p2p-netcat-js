@@ -59,7 +59,8 @@ export async function advertiseSelf (node, {
 export async function resolveTarget (node, target, {
   relays = [],
   timeoutMs = 30_000,
-  verbose = false
+  verbose = false,
+  signal
 } = {}) {
   if (isMultiaddr(target)) return multiaddr(target)
 
@@ -73,12 +74,16 @@ export async function resolveTarget (node, target, {
   let lastError
 
   while (Date.now() - startedAt < timeoutMs) {
+    signal?.throwIfAborted()
     const addresses = await knownAddresses(node, peerId)
     if (addresses.length > 0) return peerId
 
     try {
       const remaining = Math.max(1, timeoutMs - (Date.now() - startedAt))
-      const providerSignal = AbortSignal.timeout(Math.min(4_000, remaining))
+      const providerSignal = AbortSignal.any([
+        signal ?? new AbortController().signal,
+        AbortSignal.timeout(Math.min(4_000, remaining))
+      ])
 
       try {
         if (await findProviderRecord(node, peerId, providerSignal)) return peerId
@@ -88,7 +93,10 @@ export async function resolveTarget (node, target, {
 
       const afterProvider = Math.max(1, timeoutMs - (Date.now() - startedAt))
       const info = await node.peerRouting.findPeer(peerId, {
-        signal: AbortSignal.timeout(Math.min(4_000, afterProvider))
+        signal: AbortSignal.any([
+          signal ?? new AbortController().signal,
+          AbortSignal.timeout(Math.min(4_000, afterProvider))
+        ])
       })
 
       if (info.multiaddrs.length > 0) {
@@ -96,11 +104,12 @@ export async function resolveTarget (node, target, {
         return peerId
       }
     } catch (error) {
+      if (signal?.aborted) throw signal.reason
       lastError = error
       if (verbose) process.stderr.write(`[p2p-nc] PeerId пока не найден, повтор поиска: ${error.message}\n`)
     }
 
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await sleep(500, undefined, { signal })
   }
 
   const hint = 'Укажите --relay с тем же relay, который использует сервер, либо полный multiaddr.'

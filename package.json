@@ -20,7 +20,7 @@
   "scripts": {
     "start": "node ./bin/p2p-nc.js",
     "test": "node --test",
-    "lint": "node --check ./bin/p2p-nc.js && node --check ./src/cli.js && node --check ./src/node.js && node --check ./src/discovery.js && node --check ./src/session.js && npm --prefix packages/core run lint"
+    "lint": "node --check ./bin/p2p-nc.js && node --check ./src/cli.js && node --check ./src/node.js && node --check ./src/discovery.js && node --check ./src/session.js && node --check ./src/trystero.js && npm --prefix packages/core run lint"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -49,7 +49,6 @@
   "author": "santaklouse",
   "license": "MIT",
   "dependencies": {
-    "@santaklouse/p2p-netcat-core": "^0.1.0",
     "@chainsafe/libp2p-noise": "^17.0.0",
     "@chainsafe/libp2p-quic": "^2.1.1",
     "@chainsafe/libp2p-yamux": "^8.0.1",
@@ -64,6 +63,9 @@
     "@libp2p/tcp": "^11.0.24",
     "@libp2p/websockets": "^10.1.17",
     "@multiformats/multiaddr": "^13.0.1",
+    "@roamhq/wrtc": "^0.10.0",
+    "@santaklouse/p2p-netcat-core": "^0.1.0",
+    "@trystero-p2p/torrent": "^0.25.3",
     "commander": "^14.0.0",
     "libp2p": "^3.3.6"
   }

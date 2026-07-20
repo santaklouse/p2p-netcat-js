@@ -34,6 +34,11 @@ in platform-specific packages.
 | `browserDialableAddress(address, options)` | Checks whether a browser can dial an address |
 | `addressRank(address)` | Returns a numeric transport rank |
 | `preferDialAddresses(a, b)` | Comparator for sorting multiaddrs |
+| `trysteroRoomId(peerId, service)` | Builds the deterministic WebRTC room |
+| `trysteroAuthPayload(...)` | Builds a domain-separated signed challenge |
+| `encodeTrysteroAuthResponse(...)` | Encodes the public key and signature |
+| `decodeTrysteroAuthResponse(...)` | Validates and decodes the response |
+| `TrysteroStream` | Adapts an action channel to backpressure and EOF semantics |
 
 The order is WebRTC Direct, QUIC v1, WebTransport, WSS, WS, TCP, other
 addresses, and Circuit Relay. A transport appearing in the common ranking does

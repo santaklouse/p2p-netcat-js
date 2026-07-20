@@ -3,6 +3,8 @@ import type { Multiaddr } from "@multiformats/multiaddr";
 export const APP_NAME: "p2p-netcat";
 export const PROTOCOL_PREFIX: "/p2p-netcat/1.0.0";
 export const DEFAULT_SERVICE: 31337;
+export const TRYSTERO_APP_ID: "io.github.santaklouse.p2p-netcat.v1";
+export const TRYSTERO_AUTH_VERSION: 1;
 
 export type RelayValidationOptions = {
   requireWebSocket?: boolean;
@@ -37,3 +39,25 @@ export function createRelayDialPlan(input: {
 export function addressRank(address: AddressLike): number;
 export function preferDialAddresses(a: AddressLike, b: AddressLike): number;
 export function browserDialableAddress(address: AddressLike, options?: { secureContext?: boolean }): boolean;
+export function trysteroRoomId(peerId: unknown, service?: unknown): string;
+export function trysteroAuthPayload(peerId: unknown, service: unknown, challenge: ArrayBuffer | ArrayBufferView): Uint8Array;
+export function encodeTrysteroAuthResponse(publicKey: ArrayBuffer | ArrayBufferView, signature: ArrayBuffer | ArrayBufferView): Uint8Array;
+export function decodeTrysteroAuthResponse(value: ArrayBuffer | ArrayBufferView): Readonly<{ publicKey: Uint8Array; signature: Uint8Array }>;
+
+export class TrysteroStream implements AsyncIterable<Uint8Array> {
+  status: "open" | "closed";
+  writeStatus: "writable" | "closing" | "closed";
+  constructor(options: {
+    sendData: (bytes: Uint8Array) => void | Promise<void>;
+    sendControl: (control: "eof" | "abort") => void | Promise<void>;
+    onFinalize?: () => void;
+  });
+  send(chunk: ArrayBuffer | ArrayBufferView): boolean;
+  onDrain(): Promise<void>;
+  close(): Promise<void>;
+  abort(error?: Error): void;
+  receiveData(chunk: ArrayBuffer | ArrayBufferView): void;
+  receiveControl(control: "eof" | "abort"): void;
+  peerLeft(): void;
+  [Symbol.asyncIterator](): AsyncIterator<Uint8Array>;
+}
