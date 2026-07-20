@@ -71,6 +71,12 @@ function secureContext() {
   return workerScope.location.protocol === "https:";
 }
 
+function assertWebCrypto() {
+  if (!workerScope.isSecureContext || workerScope.crypto?.subtle == null) {
+    throw new Error("Web Crypto API недоступен. Откройте приложение по HTTPS, а не по HTTP.");
+  }
+}
+
 function unique(values: string[]) {
   return [...new Set(values)];
 }
@@ -255,6 +261,7 @@ async function dialFirst(candidates: Multiaddr[], protocol: string, timeoutMs = 
 async function startNode() {
   if (node != null) return node.peerId.toString();
   postLog("Сетевой стек запускается в Web Worker…");
+  assertWebCrypto();
 
   node = await createLibp2p({
     addresses: { listen: [] },

@@ -175,6 +175,7 @@ unless the peer is locally reachable.
 | `packages/core/src/index.js` | Validation, protocol IDs, relay plans, address ranking |
 | `src/identity.js` | CLI Ed25519 identity storage |
 | `src/node.js` | Node.js libp2p construction |
+| `src/relay.js` | Public `p2p-netcat/relay` lifecycle API |
 | `src/discovery.js` | CLI DHT publication and PeerId resolution |
 | `src/session.js` | Bidirectional streams, backpressure, and `-e` |
 | `src/cli.js` | CLI commands and lifecycle |

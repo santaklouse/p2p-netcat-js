@@ -15,7 +15,9 @@ Relay v2.
 - [Браузерный PWA-клиент](web/README.RU.md) — сборка, GitHub Pages,
   `network-config.json` и настройка WSS relay;
 - [API общей JavaScript-библиотеки](packages/core/README.RU.md) — функции пакета
-  `@santaklouse/p2p-netcat-core`.
+  `@santaklouse/p2p-netcat-core`;
+- [Программный API Circuit Relay](docs/RELAY_API.RU.md) — запуск и остановка
+  relay из другой Node.js-программы через `p2p-netcat/relay`.
 
 ## Что уже работает
 
@@ -144,6 +146,26 @@ p2p-nc --relay /ip4/203.0.113.10/udp/9090/quic-v1/p2p/12D3KooWK4bicbvfPNGzfuMBf6
 
 Трафик между клиентом и сервером остаётся сквозным образом зашифрованным; relay
 видит PeerId участников и объём/время трафика, но не содержимое.
+
+Тот же relay можно встроить в другую Node.js-программу без запуска CLI как
+дочернего процесса:
+
+```js
+import { startRelay } from 'p2p-netcat/relay'
+
+const relay = await startRelay({
+  identityPath: './data/p2p-netcat-relay.key',
+  localPort: 9090,
+  websocketPort: 9091,
+  enableMdns: false
+})
+
+console.log(relay.peerId, relay.addresses)
+await relay.stop()
+```
+
+Все параметры, постоянная идентичность, обработка сигналов, публичные announce
+адреса и WSS описаны в [руководстве по программному relay](docs/RELAY_API.RU.md).
 
 ## Браузерный PWA-клиент
 

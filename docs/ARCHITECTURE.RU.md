@@ -419,6 +419,7 @@ PeerId не содержит текущий IP-адрес. Поэтому абс
 | `packages/core/src/index.js` | Валидация, protocol ID, relay dial plan, рейтинг адресов |
 | `src/identity.js` | Создание и загрузка Ed25519-ключа CLI |
 | `src/node.js` | Сборка Node.js libp2p-узла |
+| `src/relay.js` | Публичный API жизненного цикла `p2p-netcat/relay` |
 | `src/discovery.js` | DHT-публикация и разрешение PeerId CLI |
 | `src/session.js` | Двунаправленный поток, backpressure и `-e` |
 | `src/cli.js` | Команды, опции и жизненный цикл CLI |

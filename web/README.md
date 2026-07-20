@@ -125,6 +125,11 @@ Service Workers and PWA installation require a secure context: HTTPS or
 supported browser mode. This is a browser security restriction, not a need for
 application server logic.
 
+An `http://*.github.io` URL is automatically replaced with its `https://`
+equivalent before the application starts. This is required for Web Crypto,
+WebRTC, and Service Workers. If another static host serves the page over plain
+HTTP, the network worker stops with an explicit HTTPS diagnostic.
+
 When a manual relay is used from an HTTPS page, it must be available through
 WSS. TLS normally terminates at a static reverse proxy or CDN that forwards
 WebSocket traffic to port `9091`. The public multiaddr then has this form:

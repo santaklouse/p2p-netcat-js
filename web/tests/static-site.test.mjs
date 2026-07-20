@@ -23,12 +23,14 @@ test("собирается как статическая PWA без сервер
 });
 
 test("сетевой стек работает в отдельном Web Worker", async () => {
-  const [worker, client, trystero, core, page] = await Promise.all([
+  const [worker, client, trystero, core, page, main, styles] = await Promise.all([
     readFile(new URL("../app/p2p.worker.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/p2p-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/trystero-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../../packages/core/src/index.js", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/main.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(worker, /@santaklouse\/p2p-netcat-core/);
@@ -40,6 +42,8 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(worker, /delegated-ipfs\.dev\/routing\/v1/);
   assert.match(worker, /kadDHT\(/);
   assert.match(worker, /indexedDB\.open/);
+  assert.match(worker, /workerScope\.crypto\?\.subtle/);
+  assert.match(worker, /Откройте приложение по HTTPS/);
   assert.match(client, /new Worker\(new URL/);
   assert.match(client, /Promise\.any/);
   assert.match(trystero, /@trystero-p2p\/torrent/);
@@ -48,4 +52,11 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(client, /transfer/);
   assert.match(page, /Необязательно · используется автопоиск/);
   assert.doesNotMatch(page, /!targetPeerId \|\| !relayAddress/);
+  assert.match(main, /location\.hostname\.endsWith\("\.github\.io"\)/);
+  assert.match(main, /window\.location\.replace\(secureUrl\)/);
+  assert.match(page, /Показывать отправленное/);
+  assert.match(page, /entry\.direction === "received"/);
+  assert.match(page, /p2p-netcat-show-sent/);
+  assert.match(styles, /\.terminal-echo-toggle/);
+  assert.match(styles, /\.terminal-sent/);
 });

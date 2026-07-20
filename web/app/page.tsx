@@ -3,6 +3,7 @@ import { BrowserP2PClient } from "./p2p-client";
 
 type ConnectionState = "idle" | "starting" | "connecting" | "connected" | "closed" | "error";
 type LogEntry = { id: number; time: string; message: string; kind: "info" | "success" | "error" };
+type TerminalEntry = { id: number; direction: "sent" | "received"; text: string };
 
 const stateLabels: Record<ConnectionState, string> = {
   idle: "Готов",
@@ -26,7 +27,8 @@ export default function Home() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
   const [localPeerId, setLocalPeerId] = useState("");
   const [message, setMessage] = useState("");
-  const [terminal, setTerminal] = useState("");
+  const [terminalEntries, setTerminalEntries] = useState<TerminalEntry[]>([]);
+  const [showSentText, setShowSentText] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [receivedBytes, setReceivedBytes] = useState(0);
   const [sentBytes, setSentBytes] = useState(0);
@@ -35,6 +37,7 @@ export default function Home() {
   const receivedChunks = useRef<ArrayBuffer[]>([]);
   const decoder = useRef(new TextDecoder());
   const terminalRef = useRef<HTMLPreElement | null>(null);
+  const terminalSequence = useRef(0);
 
   const addLog = (text: string, kind: "info" | "success" | "error" = "info") => {
     setLogs((current) => [
@@ -46,6 +49,7 @@ export default function Home() {
   useEffect(() => {
     const savedRelay = window.localStorage.getItem("p2p-netcat-relay");
     if (savedRelay) setRelayAddress(savedRelay);
+    setShowSentText(window.localStorage.getItem("p2p-netcat-show-sent") === "true");
     return () => {
       void clientRef.current?.stop();
     };
@@ -53,23 +57,31 @@ export default function Home() {
 
   useEffect(() => {
     terminalRef.current?.scrollTo({ top: terminalRef.current.scrollHeight, behavior: "smooth" });
-  }, [terminal]);
+  }, [terminalEntries, showSentText]);
 
   const connect = async (event: FormEvent) => {
     event.preventDefault();
     if (connectionState === "connecting" || connectionState === "starting") return;
 
     setConnectionState("starting");
-    setTerminal("");
+    setTerminalEntries([]);
     setReceivedBytes(0);
     setSentBytes(0);
     receivedChunks.current = [];
+    decoder.current = new TextDecoder();
+    terminalSequence.current = 0;
 
     const client = new BrowserP2PClient({
       onData: (bytes) => {
         receivedChunks.current.push(bytes.slice().buffer as ArrayBuffer);
         setReceivedBytes((value) => value + bytes.byteLength);
-        setTerminal((value) => value + decoder.current.decode(bytes, { stream: true }));
+        const text = decoder.current.decode(bytes, { stream: true });
+        if (text) {
+          setTerminalEntries((current) => [
+            ...current,
+            { id: ++terminalSequence.current, direction: "received", text },
+          ]);
+        }
       },
       onLog: addLog,
       onClosed: () => setConnectionState((state) => state === "error" ? state : "closed"),
@@ -101,12 +113,15 @@ export default function Home() {
 
   const sendMessage = async () => {
     if (!message || connectionState !== "connected") return;
+    const payload = `${message}\n`;
+    const entryId = ++terminalSequence.current;
+    setTerminalEntries((current) => [...current, { id: entryId, direction: "sent", text: payload }]);
     try {
-      const payload = `${message}\n`;
       await clientRef.current?.sendText(payload);
       setSentBytes((value) => value + new TextEncoder().encode(payload).byteLength);
       setMessage("");
     } catch (error) {
+      setTerminalEntries((current) => current.filter((entry) => entry.id !== entryId));
       addLog(error instanceof Error ? error.message : String(error), "error");
     }
   };
@@ -138,6 +153,9 @@ export default function Home() {
   };
 
   const connected = connectionState === "connected";
+  const visibleTerminalEntries = showSentText
+    ? terminalEntries
+    : terminalEntries.filter((entry) => entry.direction === "received");
 
   return (
     <main className="app-shell">
@@ -241,14 +259,31 @@ export default function Home() {
         <div className="terminal-panel">
           <div className="terminal-toolbar">
             <div className="window-dots" aria-hidden="true"><i /><i /><i /></div>
-            <span>p2p://{targetPeerId ? `${targetPeerId}` : "not-connected"}:{logicalPort}</span>
+            <span className="terminal-address">p2p://{targetPeerId ? `${targetPeerId}` : "not-connected"}:{logicalPort}</span>
+            <label className="terminal-echo-toggle">
+              <input
+                type="checkbox"
+                checked={showSentText}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setShowSentText(checked);
+                  window.localStorage.setItem("p2p-netcat-show-sent", String(checked));
+                }}
+              />
+              <span className="toggle-track" aria-hidden="true"><span /></span>
+              <span>Показывать отправленное</span>
+            </label>
             <div className="traffic-stats">
               <span>↑ {formatBytes(sentBytes)}</span><span>↓ {formatBytes(receivedBytes)}</span>
             </div>
           </div>
 
           <pre className="terminal-output" ref={terminalRef} aria-live="polite">
-            {terminal || <span className="terminal-empty">Ожидание данных…{`\n`}После соединения вывод удалённого процесса появится здесь.</span>}
+            {visibleTerminalEntries.length > 0
+              ? visibleTerminalEntries.map((entry) => (
+                <span key={entry.id} className={`terminal-${entry.direction}`}>{entry.text}</span>
+              ))
+              : <span className="terminal-empty">Ожидание данных…{`\n`}После соединения вывод удалённого процесса появится здесь.</span>}
           </pre>
 
           <div className="composer">

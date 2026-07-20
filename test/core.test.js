@@ -7,6 +7,7 @@ import { generateKeyPair, publicKeyFromProtobuf, publicKeyToProtobuf } from '@li
 import { peerIdFromPrivateKey, peerIdFromPublicKey } from '@libp2p/peer-id'
 import { createP2PNode } from '../src/node.js'
 import { loadOrCreateIdentity } from '../src/identity.js'
+import { startRelay } from 'p2p-netcat/relay'
 import {
   decodeTrysteroAuthResponse,
   encodeTrysteroAuthResponse,
@@ -43,6 +44,26 @@ test('relay multiaddr строится из relay и PeerId', async () => {
     relayedTargetAddress(relay, targetId).toString(),
     `${relay}/p2p-circuit/p2p/${targetId}`
   )
+})
+
+test('публичный relay API запускает и идемпотентно останавливает Circuit Relay v2', async () => {
+  const relay = await startRelay({
+    identityPath: null,
+    localPort: 0,
+    websocketPort: null,
+    ipVersion: 4,
+    enableMdns: false,
+    enableQuic: false
+  })
+
+  assert.match(relay.peerId, /^12D3KooW/)
+  assert.equal(relay.identityPath, null)
+  assert.ok(relay.addresses.some(address => address.includes('/ip4/127.0.0.1/tcp/')))
+  assert.ok(relay.addresses.every(address => address.endsWith(`/p2p/${relay.peerId}`)))
+  assert.equal(relay.node.status, 'started')
+
+  await Promise.all([relay.stop(), relay.stop()])
+  assert.equal(relay.node.status, 'stopped')
 })
 
 test('QUIC имеет приоритет перед TCP, а relay остаётся последним', () => {

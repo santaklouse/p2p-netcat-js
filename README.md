@@ -15,7 +15,9 @@ Amino DHT, mDNS, and Circuit Relay v2.
 - [Browser PWA guide](web/README.md) — build, GitHub Pages,
   `network-config.json`, and WSS relay configuration;
 - [Shared JavaScript library API](packages/core/README.md) — exported functions
-  from `@santaklouse/p2p-netcat-core`.
+  from `@santaklouse/p2p-netcat-core`;
+- [Programmatic Circuit Relay API](docs/RELAY_API.md) — start and stop a relay
+  from another Node.js application through `p2p-netcat/relay`.
 
 ## What already works
 
@@ -146,6 +148,26 @@ p2p-nc --relay /ip4/203.0.113.10/udp/9090/quic-v1/p2p/12D3KooWK4bicbvfPNGzfuMBf6
 Traffic between the client and server remains end-to-end encrypted. The relay
 can see the participants' PeerIds and traffic volume and timing, but it cannot
 read the contents.
+
+The same relay can be embedded into another Node.js process without spawning
+the CLI:
+
+```js
+import { startRelay } from 'p2p-netcat/relay'
+
+const relay = await startRelay({
+  identityPath: './data/p2p-netcat-relay.key',
+  localPort: 9090,
+  websocketPort: 9091,
+  enableMdns: false
+})
+
+console.log(relay.peerId, relay.addresses)
+await relay.stop()
+```
+
+See the [programmatic relay guide](docs/RELAY_API.md) for every option,
+persistent identity, signal handling, public announce addresses, and WSS.
 
 ## Browser PWA client
 

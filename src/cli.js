@@ -7,6 +7,7 @@ import { APP_VERSION, IPFS_BOOTSTRAP_PEERS } from './constants.js'
 import { bridgeSession, execSession } from './session.js'
 import { advertiseSelf, resolveTarget } from './discovery.js'
 import { connectTrystero, startTrysteroListener } from './trystero.js'
+import { startRelay } from './relay.js'
 
 function integer (value, previous) {
   const number = Number(value)
@@ -263,22 +264,19 @@ async function runClient (target, serviceArgument, options) {
 async function runRelay (options) {
   if (options.ipv4 && options.ipv6) throw new Error('Опции -4 и -6 нельзя использовать одновременно')
   const identityPath = resolve(options.identity ?? `${defaultIdentityPath()}.relay`)
-  const privateKey = await loadOrCreateIdentity(identityPath)
-  const node = await createP2PNode({
-    privateKey,
+  const relay = await startRelay({
+    identityPath,
     localPort: options.localPort,
     websocketPort: options.websocketPort,
     ipVersion: options.ipv4 ? 4 : options.ipv6 ? 6 : undefined,
     announce: options.announce,
-    bootstrapPeers: [],
-    enableDht: false,
     enableMdns: options.mdns !== false,
-    enableQuic: options.quic !== false,
-    relayServer: true
+    enableQuic: options.quic !== false
   })
+  const node = relay.node
   installShutdown(node)
   printNodeInfo(node, { json: options.json, label: 'relay' })
-  stderr(`[p2p-nc] relay готов; постоянный ключ: ${identityPath}`)
+  stderr(`[p2p-nc] relay готов; постоянный ключ: ${relay.identityPath}`)
   await new Promise(() => {})
 }
 
