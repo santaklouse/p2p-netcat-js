@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { generateKeyPair } from '@libp2p/crypto/keys'
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
-import { createP2PNode, preferQuicAddresses, relayedTargetAddress } from '../src/node.js'
+import { createP2PNode } from '../src/node.js'
 import { loadOrCreateIdentity } from '../src/identity.js'
-import { protocolForService, validateService } from '../src/constants.js'
+import { preferDialAddresses, protocolForService, relayedTargetAddress, validateService } from '@santaklouse/p2p-netcat-core'
 
 test('логический порт валидируется и преобразуется в protocol id', () => {
   assert.equal(validateService('8080'), 8080)
@@ -43,8 +43,8 @@ test('QUIC имеет приоритет перед TCP, а relay остаётс
   const tcpAddress = address('/ip4/127.0.0.1/tcp/9090')
   const relayAddress = address('/ip4/127.0.0.1/tcp/9091/p2p/relay/p2p-circuit')
 
-  assert.ok(preferQuicAddresses(quicAddress, tcpAddress) < 0)
-  assert.ok(preferQuicAddresses(tcpAddress, relayAddress) < 0)
+  assert.ok(preferDialAddresses(quicAddress, tcpAddress) < 0)
+  assert.ok(preferDialAddresses(tcpAddress, relayAddress) < 0)
 })
 
 test('два локальных узла передают двунаправленный бинарный поток', async () => {

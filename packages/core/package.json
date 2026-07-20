@@ -1,0 +1,52 @@
+{
+  "name": "@santaklouse/p2p-netcat-core",
+  "version": "0.1.0",
+  "description": "Browser-safe protocol, addressing and dial planning primitives for p2p-netcat",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check ./src/index.js",
+    "prepublishOnly": "npm test && npm run lint"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/santaklouse/p2p-netcat-js.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/santaklouse/p2p-netcat-js/issues"
+  },
+  "homepage": "https://github.com/santaklouse/p2p-netcat-js/tree/main/packages/core",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "p2p",
+    "libp2p",
+    "netcat",
+    "peer-id",
+    "ipfs",
+    "circuit-relay"
+  ],
+  "author": "santaklouse",
+  "license": "MIT",
+  "dependencies": {
+    "@libp2p/peer-id": "^6.0.4",
+    "@multiformats/multiaddr": "^13.0.1"
+  }
+}

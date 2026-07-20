@@ -1,8 +1,18 @@
 {
   "name": "p2p-netcat",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "TCP/QUIC netcat-like CLI addressed by libp2p PeerId instead of IP",
   "type": "module",
+  "workspaces": [
+    "packages/core"
+  ],
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "README.RU.md",
+    "LICENSE"
+  ],
   "bin": {
     "p2p-nc": "./bin/p2p-nc.js",
     "pnc": "./bin/p2p-nc.js"
@@ -10,13 +20,36 @@
   "scripts": {
     "start": "node ./bin/p2p-nc.js",
     "test": "node --test",
-    "lint": "node --check ./bin/p2p-nc.js && node --check ./src/cli.js && node --check ./src/node.js && node --check ./src/session.js"
+    "lint": "node --check ./bin/p2p-nc.js && node --check ./src/cli.js && node --check ./src/node.js && node --check ./src/discovery.js && node --check ./src/session.js && npm --prefix packages/core run lint"
   },
   "engines": {
     "node": ">=22.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/santaklouse/p2p-netcat-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/santaklouse/p2p-netcat-js/issues"
+  },
+  "homepage": "https://github.com/santaklouse/p2p-netcat-js#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "p2p",
+    "libp2p",
+    "netcat",
+    "peer-id",
+    "ipfs",
+    "quic",
+    "circuit-relay"
+  ],
+  "author": "santaklouse",
   "license": "MIT",
   "dependencies": {
+    "@santaklouse/p2p-netcat-core": "^0.1.0",
     "@chainsafe/libp2p-noise": "^17.0.0",
     "@chainsafe/libp2p-quic": "^2.1.1",
     "@chainsafe/libp2p-yamux": "^8.0.1",

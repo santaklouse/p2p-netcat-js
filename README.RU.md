@@ -29,6 +29,14 @@ Relay v2.
 Требуется Node.js 22 или новее. QUIC-транспорт использует нативный N-API-модуль
 с готовыми бинарными сборками для основных платформ macOS, Linux и Windows.
 
+Установка опубликованного CLI из npm:
+
+```bash
+npm install --global p2p-netcat
+```
+
+Для разработки из исходного кода:
+
 ```bash
 npm install
 npm link
@@ -162,6 +170,33 @@ p2p-nc relay -4 -p 9090 --websocket-port 9091
 с TLS reverse proxy на 443-м порту. Полная инструкция находится в
 [`web/README.md`](web/README.md).
 
+## Общая JavaScript-библиотека
+
+Логика, которая должна совпадать в CLI и браузере, вынесена в локальный npm-пакет
+[`@santaklouse/p2p-netcat-core`](packages/core). Он не использует Node.js API и содержит
+единые правила для логических портов и protocol ID, проверки PeerId/multiaddr,
+валидации WS/WSS relay, построения Circuit Relay-маршрута и выбора приоритетных
+транспортов.
+
+CLI импортирует пакет напрямую, а браузер использует его внутри Web Worker.
+Платформенные части намеренно разделены: работа с stdin/stdout, локальным ключом,
+QUIC и DHT остаётся в CLI; DOM, Worker RPC и PWA lifecycle — в каталоге `web`.
+Благодаря этому discovery и fallback можно развивать через общий интерфейс без
+дублирования правил подключения.
+
+```js
+import { createRelayDialPlan, protocolForService } from '@santaklouse/p2p-netcat-core'
+
+const protocol = protocolForService(31337)
+const plan = createRelayDialPlan({
+  peerId: '12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9',
+  service: 31337,
+  relay: '/dns4/relay.example/tcp/443/wss/p2p/12D3KooWEqeQRAJ61HSv9yMPk8yzjke7NxmTFcvFt4GzwXxzVjXW',
+  requireWebSocket: true,
+  secureContext: true
+})
+```
+
 ## Аналоги типичных команд netcat
 
 Проверка доступности без обмена данными:
@@ -227,5 +262,6 @@ libp2p QUIC-потоки без лишних HTTP-запросов, заголо
 ```bash
 npm test
 npm run lint
-cd web && npm test && npm run lint
+npm --prefix packages/core test
+cd web && npm ci && npm test && npm run lint
 ```

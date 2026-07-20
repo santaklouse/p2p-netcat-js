@@ -14,6 +14,19 @@ CSS, JavaScript, Web Worker, Service Worker, manifest и изображений.
 - устанавливаемая PWA с офлайн-кешем интерфейса и автообновлением Service Worker;
 - адаптивный интерфейс для компьютера, планшета и телефона.
 
+## Архитектура
+
+Web Worker импортирует browser-safe пакет
+[`@santaklouse/p2p-netcat-core`](../packages/core), который одновременно использует CLI.
+Общими являются protocol ID, проверка PeerId и логического порта, правила
+WS/WSS и построение Circuit Relay dial plan. В самом веб-проекте остаются только
+libp2p WebSocket-транспорт, обмен сообщениями с Worker, терминальный интерфейс и
+PWA/Service Worker. Серверного JavaScript-кода у этой архитектуры нет.
+
+Файл `.npmrc` включает `install-links=true`: благодаря этому локальный пакет
+копируется в `node_modules` при `npm ci`, и чистая сборка GitHub Actions не
+зависит от заранее установленных пакетов в корне репозитория.
+
 ## Установка и сборка
 
 Требуется Node.js 22.13 или новее.

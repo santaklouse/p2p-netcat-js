@@ -234,7 +234,7 @@ export default function Home() {
         <div className="terminal-panel">
           <div className="terminal-toolbar">
             <div className="window-dots" aria-hidden="true"><i /><i /><i /></div>
-            <span>p2p://{targetPeerId ? `${targetPeerId.slice(0, 12)}…` : "not-connected"}:{logicalPort}</span>
+            <span>p2p://{targetPeerId ? `${targetPeerId}` : "not-connected"}:{logicalPort}</span>
             <div className="traffic-stats">
               <span>↑ {formatBytes(sentBytes)}</span><span>↓ {formatBytes(receivedBytes)}</span>
             </div>

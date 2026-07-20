@@ -21,12 +21,15 @@ test("собирается как статическая PWA без сервер
 });
 
 test("сетевой стек работает в отдельном Web Worker", async () => {
-  const [worker, client] = await Promise.all([
+  const [worker, client, core] = await Promise.all([
     readFile(new URL("../app/p2p.worker.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/p2p-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../packages/core/src/index.js", import.meta.url), "utf8"),
   ]);
 
-  assert.match(worker, /\/p2p-netcat\/1\.0\.0/);
+  assert.match(worker, /@santaklouse\/p2p-netcat-core/);
+  assert.doesNotMatch(worker, /const PROTOCOL_PREFIX/);
+  assert.match(core, /\/p2p-netcat\/1\.0\.0/);
   assert.match(worker, /circuitRelayTransport\(\)/);
   assert.match(worker, /webSockets\(\)/);
   assert.match(client, /new Worker\(new URL/);

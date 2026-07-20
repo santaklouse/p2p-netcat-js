@@ -11,18 +11,8 @@ import { bootstrap } from '@libp2p/bootstrap'
 import { mdns } from '@libp2p/mdns'
 import { kadDHT, removePrivateAddressesMapper } from '@libp2p/kad-dht'
 import { multiaddr } from '@multiformats/multiaddr'
-import { IPFS_BOOTSTRAP_PEERS } from './constants.js'
-
-function normalizeRelay (address) {
-  const value = address.trim().replace(/\/$/, '')
-  multiaddr(value)
-
-  if (!value.includes('/p2p/')) {
-    throw new Error(`Адрес relay должен содержать /p2p/<PeerId>: ${address}`)
-  }
-
-  return value
-}
+import { normalizeRelayAddress, preferDialAddresses } from '@santaklouse/p2p-netcat-core'
+import { APP_VERSION, IPFS_BOOTSTRAP_PEERS } from './constants.js'
 
 export async function createP2PNode ({
   privateKey,
@@ -39,7 +29,7 @@ export async function createP2PNode ({
   dhtServer = false,
   listen = true
 } = {}) {
-  const relayAddresses = relays.map(normalizeRelay)
+  const relayAddresses = relays.map(address => normalizeRelayAddress(address))
   const listenAddresses = []
 
   if (listen) {
@@ -70,7 +60,7 @@ export async function createP2PNode ({
   }
 
   const services = {
-    identify: identify({ agentVersion: 'p2p-netcat/0.1.0' }),
+    identify: identify({ agentVersion: `p2p-netcat/${APP_VERSION}` }),
     ping: ping()
   }
 
@@ -122,22 +112,7 @@ export async function createP2PNode ({
     },
     connectionManager: {
       maxConnections: relayServer ? 512 : 128,
-      addressSorter: preferQuicAddresses
+      addressSorter: preferDialAddresses
     }
   })
-}
-
-export function preferQuicAddresses (a, b) {
-  return addressRank(a.multiaddr) - addressRank(b.multiaddr)
-}
-
-function addressRank (address) {
-  const value = address.toString()
-  if (value.includes('/p2p-circuit')) return 2
-  if (value.includes('/quic-v1')) return 0
-  return 1
-}
-
-export function relayedTargetAddress (relay, peerId) {
-  return multiaddr(`${normalizeRelay(relay)}/p2p-circuit/p2p/${peerId}`)
 }

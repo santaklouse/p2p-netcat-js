@@ -29,6 +29,14 @@ does use UDP underneath, but it still provides a reliable, ordered stream.
 Node.js 22 or newer is required. The QUIC transport uses a native N-API module
 with prebuilt binaries for mainstream macOS, Linux, and Windows platforms.
 
+Install the published CLI from npm:
+
+```bash
+npm install --global p2p-netcat
+```
+
+For development from source:
+
 ```bash
 npm install
 npm link
@@ -164,6 +172,32 @@ Locally, use the printed address containing `/tcp/9091/ws/p2p/`. When the page
 is hosted on HTTPS, publish the relay over WSS, typically through a TLS reverse
 proxy on port 443. See [`web/README.md`](web/README.md) for the complete guide.
 
+## Shared JavaScript library
+
+Logic that must behave identically in the CLI and browser lives in the local
+[`@santaklouse/p2p-netcat-core`](packages/core) npm package. It uses no Node.js APIs and
+owns logical-port and protocol-ID rules, PeerId/multiaddr validation, WS/WSS
+relay validation, Circuit Relay route planning, and transport preference.
+
+The CLI imports this package directly, while the browser imports it from its
+Web Worker. Platform adapters remain separate: stdin/stdout, local identities,
+QUIC, and the DHT belong to the CLI; DOM integration, Worker RPC, and the PWA
+lifecycle belong to `web`. This gives future discovery and fallback strategies
+one shared interface instead of two diverging implementations.
+
+```js
+import { createRelayDialPlan, protocolForService } from '@santaklouse/p2p-netcat-core'
+
+const protocol = protocolForService(31337)
+const plan = createRelayDialPlan({
+  peerId: '12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9',
+  service: 31337,
+  relay: '/dns4/relay.example/tcp/443/wss/p2p/12D3KooWEqeQRAJ61HSv9yMPk8yzjke7NxmTFcvFt4GzwXxzVjXW',
+  requireWebSocket: true,
+  secureContext: true
+})
+```
+
 ## Equivalents of common netcat commands
 
 Check reachability without exchanging data:
@@ -230,5 +264,6 @@ QUIC streams, avoiding unnecessary HTTP request, header, and CONNECT semantics.
 ```bash
 npm test
 npm run lint
-cd web && npm test && npm run lint
+npm --prefix packages/core test
+cd web && npm ci && npm test && npm run lint
 ```

@@ -6,10 +6,9 @@ import { circuitRelayTransport } from "@libp2p/circuit-relay-v2";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import { identify } from "@libp2p/identify";
-import { peerIdFromString } from "@libp2p/peer-id";
 import { multiaddr } from "@multiformats/multiaddr";
+import { createRelayDialPlan } from "@santaklouse/p2p-netcat-core";
 
-const PROTOCOL_PREFIX = "/p2p-netcat/1.0.0";
 const workerScope: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 type Node = Awaited<ReturnType<typeof createLibp2p>>;
 type Stream = Awaited<ReturnType<Node["dialProtocol"]>>;
@@ -26,28 +25,6 @@ let receiveTask: Promise<void> | null = null;
 
 function postLog(message: string, kind: "info" | "success" | "error" = "info") {
   workerScope.postMessage({ type: "log", message, kind });
-}
-
-function normalizeRelayAddress(value: string) {
-  const relay = value.trim().replace(/\/$/, "");
-  const text = multiaddr(relay).toString();
-
-  if (!text.includes("/p2p/")) throw new Error("Relay-адрес должен содержать /p2p/PeerId");
-  if (!text.includes("/ws") && !text.includes("/wss")) {
-    throw new Error("Браузеру нужен WebSocket relay-адрес с /ws или /wss");
-  }
-  if (workerScope.location.protocol === "https:" && !text.includes("/wss")) {
-    throw new Error("HTTPS-страница может подключаться только к защищённому /wss relay");
-  }
-  return text;
-}
-
-function logicalPort(value: unknown) {
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("Логический порт должен быть числом от 1 до 65535");
-  }
-  return port;
 }
 
 async function startNode() {
@@ -76,17 +53,21 @@ async function connect(payload: Record<string, unknown>) {
   if (stream != null) throw new Error("Соединение уже открыто");
   await startNode();
 
-  const target = peerIdFromString(String(payload.targetPeerId ?? "").trim());
-  const relay = normalizeRelayAddress(String(payload.relayAddress ?? ""));
-  const port = logicalPort(payload.logicalPort);
-  const destination = multiaddr(`${relay}/p2p-circuit/p2p/${target}`);
+  const plan = createRelayDialPlan({
+    peerId: payload.targetPeerId,
+    service: payload.logicalPort,
+    relay: payload.relayAddress,
+    requireWebSocket: true,
+    secureContext: workerScope.location.protocol === "https:",
+  });
+  const destination = multiaddr(plan.destination);
 
-  postLog(`Открываем relay-маршрут к ${target}:${port}…`);
-  stream = await node!.dialProtocol(destination, `${PROTOCOL_PREFIX}/${port}`, {
+  postLog(`Открываем relay-маршрут к ${plan.peerId}:${plan.service}…`);
+  stream = await node!.dialProtocol(destination, plan.protocol, {
     signal: AbortSignal.timeout(30_000),
     runOnLimitedConnection: true,
   });
-  postLog(`Канал ${target}:${port} открыт`, "success");
+  postLog(`Канал ${plan.peerId}:${plan.service} открыт`, "success");
   receiveTask = receiveLoop(stream);
 }
 
