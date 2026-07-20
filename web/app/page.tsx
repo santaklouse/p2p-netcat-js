@@ -292,7 +292,7 @@ export default function Home() {
       </section>
 
       <footer>
-        <p>p2p-netcat web <span>v0.1.0</span></p>
+        <p>p2p-netcat web <span>v0.1.1</span></p>
         <p>Delegated Routing · IPFS DHT · WSS · Noise · Yamux</p>
       </footer>
     </main>
