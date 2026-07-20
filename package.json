@@ -1,6 +1,6 @@
 {
   "name": "@santaklouse/p2p-netcat",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "TCP/QUIC netcat-like CLI addressed by libp2p PeerId instead of IP",
   "type": "module",
   "workspaces": [
