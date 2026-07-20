@@ -64,7 +64,7 @@
     "@libp2p/websockets": "^10.1.17",
     "@multiformats/multiaddr": "^13.0.1",
     "@roamhq/wrtc": "^0.10.0",
-    "@santaklouse/p2p-netcat-core": "^0.1.0",
+    "@santaklouse/p2p-netcat-core": "file:./packages/core",
     "@trystero-p2p/torrent": "^0.25.3",
     "commander": "^14.0.0",
     "libp2p": "^3.3.6"
