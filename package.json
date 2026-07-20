@@ -1,6 +1,6 @@
 {
   "name": "p2p-netcat",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "TCP/QUIC netcat-like CLI addressed by libp2p PeerId instead of IP",
   "type": "module",
   "workspaces": [
