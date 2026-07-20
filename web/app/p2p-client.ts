@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  PTY_FRAME_DATA,
+  PtyFrameDecoder,
+  encodePtyData,
+  encodePtyResize,
+} from "@santaklouse/p2p-netcat-core";
 import { BrowserTrysteroClient } from "./trystero-client";
 
 export type ClientEvents = {
@@ -137,20 +143,39 @@ class WorkerP2PClient {
 
 export class BrowserP2PClient {
   private readonly events: ClientEvents;
+  private readonly transportEvents: ClientEvents;
   private readonly worker: WorkerP2PClient;
   private trystero: BrowserTrysteroClient | null = null;
   private active: "worker" | "trystero" | null = null;
+  private interactive = false;
+  private readonly ptyDecoder = new PtyFrameDecoder();
 
   constructor(events: ClientEvents) {
     this.events = events;
-    this.worker = new WorkerP2PClient(events);
+    this.transportEvents = {
+      onData: (bytes) => this.receive(bytes),
+      onLog: events.onLog,
+      onClosed: () => {
+        if (this.interactive) {
+          try {
+            this.ptyDecoder.finish();
+          } catch (error) {
+            this.events.onLog(error instanceof Error ? error.message : String(error), "error");
+          }
+        }
+        events.onClosed();
+      },
+    };
+    this.worker = new WorkerP2PClient(this.transportEvents);
   }
 
   start() {
     return this.worker.start();
   }
 
-  async connect(targetPeerId: string, logicalPort: number, relayAddress: string) {
+  async connect(targetPeerId: string, logicalPort: number, relayAddress: string, interactive = false) {
+    this.interactive = interactive;
+    this.ptyDecoder.reset();
     if (relayAddress.trim()) {
       await this.worker.connect(targetPeerId, logicalPort, relayAddress);
       this.active = "worker";
@@ -158,7 +183,7 @@ export class BrowserP2PClient {
       return;
     }
 
-    const trystero = new BrowserTrysteroClient(this.events);
+    const trystero = new BrowserTrysteroClient(this.transportEvents);
     this.trystero = trystero;
     try {
       const winner = await Promise.any([
@@ -185,8 +210,8 @@ export class BrowserP2PClient {
   }
 
   async send(bytes: Uint8Array) {
-    if (this.active === "trystero") return this.trystero!.send(bytes);
-    return this.worker.send(bytes);
+    const payload = this.interactive ? encodePtyData(bytes) : bytes;
+    return this.sendTransport(payload);
   }
 
   async sendText(text: string) {
@@ -210,9 +235,35 @@ export class BrowserP2PClient {
     return this.worker.closeWrite();
   }
 
+  async resize(columns: number, rows: number) {
+    if (!this.interactive || this.active == null) return;
+    await this.sendTransport(encodePtyResize(columns, rows));
+  }
+
   async stop() {
     await Promise.allSettled([this.worker.stop(), this.trystero?.stop() ?? Promise.resolve()]);
     this.active = null;
     this.trystero = null;
+  }
+
+  private async sendTransport(bytes: Uint8Array) {
+    if (this.active === "trystero") return this.trystero!.send(bytes);
+    if (this.active === "worker") return this.worker.send(bytes);
+    throw new Error("P2P-канал ещё не открыт");
+  }
+
+  private receive(bytes: Uint8Array) {
+    if (!this.interactive) {
+      this.events.onData(bytes);
+      return;
+    }
+
+    try {
+      for (const frame of this.ptyDecoder.push(bytes)) {
+        if (frame.type === PTY_FRAME_DATA) this.events.onData(frame.data);
+      }
+    } catch (error) {
+      this.events.onLog(`Ошибка PTY-протокола: ${error instanceof Error ? error.message : String(error)}`, "error");
+    }
   }
 }

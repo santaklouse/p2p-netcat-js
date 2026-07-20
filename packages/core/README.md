@@ -18,6 +18,7 @@ The package owns:
 - a shared transport preference order;
 - the application PubSub discovery topic and interval;
 - the common WebRTC STUN pool.
+- browser-safe PTY data/resize framing and incremental decoding.
 
 Creating a libp2p node, querying the DHT, Web Worker RPC, and stdin/stdout remain
 in platform-specific packages.
@@ -28,6 +29,10 @@ in platform-specific packages.
 |---|---|
 | `validateService(value)` | Validates a logical port in the `1..65535` range |
 | `protocolForService(service)` | Builds `/p2p-netcat/1.0.0/{service}` |
+| `encodePtyData(value)` | Frames keyboard or terminal bytes for an interactive session |
+| `encodePtyResize(columns, rows)` | Frames terminal dimensions |
+| `decodePtyResize(value)` | Decodes and validates terminal dimensions |
+| `PtyFrameDecoder` | Incrementally decodes PTY frames split across transport chunks |
 | `normalizePeerId(value)` | Validates and canonicalizes a PeerId |
 | `normalizeMultiaddr(value)` | Validates and canonicalizes a multiaddr |
 | `normalizeRelayAddress(value, options)` | Applies relay, WS/WSS, and secure-context checks |

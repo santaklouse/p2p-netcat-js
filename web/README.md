@@ -20,16 +20,36 @@ HTML, CSS, JavaScript, a Web Worker, a Service Worker, a manifest, and images.
 - an optional manual relay multiaddr as an emergency override;
 - Noise encryption and Yamux inside a dedicated Web Worker;
 - a terminal widget for text and binary output;
+- an interactive xterm-compatible PTY client for listeners started with `-i`;
 - text, file, and EOF sending, plus received-byte download;
 - an installable PWA with offline UI caching and Service Worker auto-update;
 - responsive desktop, tablet, and mobile layouts.
+
+## Connecting to an `-i` listener
+
+Start the CLI listener:
+
+```bash
+p2p-nc -l -i 31337
+```
+
+In the web UI, enter the printed PeerId and port `31337`, then enable
+**Interactive PTY -i** before connecting. In this mode the browser uses the
+same framed PTY protocol as the CLI client: keyboard input is forwarded
+directly, ANSI sequences are rendered by the terminal, and widget resize events
+are sent to the remote `node-pty` process.
+
+Type `exit` or press `Ctrl-E` followed by `q` to leave. The mode is explicit
+because ordinary streams and PTY sessions share one logical protocol ID and the
+server does not send a separate mode-negotiation message. Leave the switch off
+when the listener was started without `-i`.
 
 ## Architecture
 
 The Web Worker imports the browser-safe
 [`@santaklouse/p2p-netcat-core`](../packages/core) package also used by the CLI.
-Protocol IDs, PeerId and logical-port validation, WS/WSS rules, and Circuit
-Relay dial-plan construction are shared. Delegated Routing, the DHT client,
+Protocol IDs, PeerId and logical-port validation, the PTY codec, WS/WSS rules,
+and Circuit Relay dial-plan construction are shared. Delegated Routing, the DHT client,
 libp2p WebTransport/WebSocket transports, Trystero/WebRTC, Worker messaging,
 the terminal UI, and the PWA/Service Worker remain in the web project. This
 architecture runs no server-side JavaScript.

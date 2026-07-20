@@ -94,6 +94,12 @@ handled by the local p2p-netcat process. Window size changes are sent as PTY
 control frames. Type `exit` to close the shell, or press `Ctrl-e q` to close the
 client stream.
 
+The static web client can also connect to this listener. Enable
+**Interactive PTY -i** before connecting; its xterm widget uses the shared PTY
+codec, forwards keyboard input and resize events, and implements `Ctrl-e q`.
+The switch must remain off for a listener started without `-i` because the
+ordinary and interactive modes intentionally use different wire encodings.
+
 `-i` requires a TTY and cannot be combined with `-e`, `-S`, or client `-p`.
 Listener PTY mode remains active and can serve multiple clients concurrently.
 The gs-netcat `Ctrl-e c` command console and its `get`/`put` file-transfer

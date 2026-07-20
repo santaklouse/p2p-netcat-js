@@ -1,6 +1,6 @@
 {
   "name": "p2p-netcat-web",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -30,6 +30,8 @@
     "@multiformats/multiaddr": "^13.0.1",
     "@santaklouse/p2p-netcat-core": "file:../packages/core",
     "@trystero-p2p/torrent": "^0.25.3",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "libp2p": "^3.3.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"

@@ -2,13 +2,19 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   DEFAULT_STUN_URLS,
+  PTY_FRAME_DATA,
+  PTY_FRAME_RESIZE,
   PUBSUB_DISCOVERY_INTERVAL_MS,
   PUBSUB_DISCOVERY_TOPIC,
+  PtyFrameDecoder,
   TrysteroStream,
   browserDialableAddress,
   createRelayDialPlan,
   decodeTrysteroAuthResponse,
   defaultRtcConfiguration,
+  decodePtyResize,
+  encodePtyData,
+  encodePtyResize,
   encodeTrysteroAuthResponse,
   normalizeRelayAddress,
   preferDialAddresses,
@@ -17,6 +23,25 @@ import {
   trysteroRoomId,
   validateService
 } from '../src/index.js'
+
+test('PTY codec is browser-safe and preserves fragmented frames', () => {
+  const data = encodePtyData(new TextEncoder().encode('hello'))
+  const resize = encodePtyResize(132, 43)
+  const combined = new Uint8Array(data.byteLength + resize.byteLength)
+  combined.set(data)
+  combined.set(resize, data.byteLength)
+
+  const decoder = new PtyFrameDecoder()
+  assert.deepEqual(decoder.push(combined.slice(0, 3)), [])
+  const frames = decoder.push(combined.slice(3))
+  decoder.finish()
+
+  assert.equal(frames[0].type, PTY_FRAME_DATA)
+  assert.equal(new TextDecoder().decode(frames[0].data), 'hello')
+  assert.equal(frames[1].type, PTY_FRAME_RESIZE)
+  assert.deepEqual(decodePtyResize(frames[1].data), { columns: 132, rows: 43 })
+  assert.throws(() => new PtyFrameDecoder().push(Uint8Array.from([0, 0, 16, 0, 1])), /exceeds/)
+})
 
 test('общая сеть использует одну PubSub-тему и переданный STUN-пул', () => {
   assert.equal(PUBSUB_DISCOVERY_TOPIC, 'io.github.santaklouse.p2p-netcat.peer-discovery.v1')

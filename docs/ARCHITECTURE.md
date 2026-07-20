@@ -173,7 +173,10 @@ gs-netcat-style adapter modes sit above the same authenticated stream. Client
 `-p` creates a local TCP listener and opens one P2P stream per socket. Listener
 `-d/-p` bridges each stream to a TCP destination; `-S` parses SOCKS4/4a/5 before
 dialing the requested destination. Interactive `-i` frames PTY data and resize
-events, while `node-pty` owns the server pseudoterminal. Tor `-T` disables all
+events, while `node-pty` owns the server pseudoterminal. The browser enables
+this framing explicitly, decodes it before UI delivery, renders ANSI with
+xterm, and sends keyboard and resize events through either libp2p or Trystero.
+Tor `-T` disables all
 direct and UDP discovery paths and re-executes a relay-only client under
 `torsocks`.
 
@@ -215,7 +218,7 @@ unless the peer is locally reachable.
 
 | File | Responsibility |
 |---|---|
-| `packages/core/src/index.js` | Validation, protocol IDs, relay plans, discovery constants, STUN pool |
+| `packages/core/src/index.js` | Validation, protocol IDs, PTY codec, relay plans, discovery constants, STUN pool |
 | `src/identity.js` | CLI Ed25519 identity storage |
 | `src/node.js` | Node.js libp2p and signed PubSub discovery construction |
 | `src/relay.js` | Public `@santaklouse/p2p-netcat/relay` lifecycle API |
@@ -226,6 +229,7 @@ unless the peer is locally reachable.
 | `src/tor.js` | Tor option detection and isolated torsocks re-exec |
 | `src/cli.js` | CLI commands and lifecycle |
 | `web/app/p2p-client.ts` | React-to-Worker RPC |
+| `web/app/browser-terminal.tsx` | ANSI terminal rendering, keyboard input, resize, and `Ctrl-E q` |
 | `web/app/p2p.worker.ts` | Browser libp2p, discovery, route race, and cache |
 | `web/public/network-config.json` | Static routing endpoints and relay pool |
 | `web/vite.config.ts` | Static build and PWA configuration |

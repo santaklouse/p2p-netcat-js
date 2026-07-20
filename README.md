@@ -288,6 +288,10 @@ p2p-nc -l -i 31337
 p2p-nc -i 12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9 31337
 ```
 
+Before connecting the browser client to this listener, enable
+**Interactive PTY -i**. The web terminal renders ANSI and forwards keyboard and
+resize events through the shared `@santaklouse/p2p-netcat-core` PTY codec.
+
 `-q` suppresses diagnostics on stderr without changing application bytes.
 `-T` re-executes the client under `torsocks`, disables direct QUIC/WebRTC and
 automatic discovery, and therefore requires an explicit TCP/WS/WSS Circuit

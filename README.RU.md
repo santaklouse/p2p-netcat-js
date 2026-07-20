@@ -289,6 +289,10 @@ p2p-nc -l -i 31337
 p2p-nc -i 12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9 31337
 ```
 
+В браузерном клиенте перед подключением к такому listener включите
+**«Интерактивный PTY -i»**. Веб-терминал обрабатывает ANSI, передаёт клавиатуру
+и resize тем же общим PTY codec из `@santaklouse/p2p-netcat-core`.
+
 `-q` скрывает диагностику в stderr, не изменяя прикладные байты. `-T` повторно
 запускает клиент через `torsocks`, отключает прямые QUIC/WebRTC и автоматический
 discovery, поэтому требует явного TCP/WS/WSS Circuit Relay:

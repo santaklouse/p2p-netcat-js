@@ -369,7 +369,9 @@ EOF stdin закрывает пишущую сторону потока посл
 P2P-поток для каждого сокета. Listener `-d/-p` соединяет поток с TCP-целью, а
 `-S` сначала разбирает SOCKS4/4a/5 request. Интерактивный `-i` кадрирует данные
 PTY и изменение размера окна, а `node-pty` управляет псевдотерминалом сервера.
-Tor `-T` отключает прямые и UDP/discovery-маршруты и повторно запускает
+Браузер включает это кадрирование явно, декодирует его до передачи в UI,
+обрабатывает ANSI через xterm и отправляет клавиатуру/resize через libp2p или
+Trystero. Tor `-T` отключает прямые и UDP/discovery-маршруты и повторно запускает
 relay-only клиент через `torsocks`.
 
 ## 11. Режим выполнения команды
@@ -454,7 +456,7 @@ PeerId не содержит текущий IP-адрес. Поэтому абс
 
 | Файл | Ответственность |
 |---|---|
-| `packages/core/src/index.js` | Валидация, protocol ID, relay dial plan, PubSub/STUN-конфигурация |
+| `packages/core/src/index.js` | Валидация, protocol ID, PTY codec, relay dial plan, PubSub/STUN-конфигурация |
 | `src/identity.js` | Создание и загрузка Ed25519-ключа CLI |
 | `src/node.js` | Сборка Node.js libp2p-узла и подписанного PubSub discovery |
 | `src/relay.js` | Публичный API жизненного цикла `@santaklouse/p2p-netcat/relay` |
@@ -465,6 +467,7 @@ PeerId не содержит текущий IP-адрес. Поэтому абс
 | `src/tor.js` | Определение Tor mode и изолированный re-exec через torsocks |
 | `src/cli.js` | Команды, опции и жизненный цикл CLI |
 | `web/app/p2p-client.ts` | RPC между React и Web Worker |
+| `web/app/browser-terminal.tsx` | ANSI-терминал, клавиатурный ввод, resize и `Ctrl-E q` |
 | `web/app/p2p.worker.ts` | Браузерный libp2p, discovery, race и IndexedDB |
 | `web/public/network-config.json` | Статические routing endpoints и relay-пул |
 | `web/vite.config.ts` | Статическая сборка и PWA Service Worker |

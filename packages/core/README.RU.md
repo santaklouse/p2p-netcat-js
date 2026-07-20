@@ -19,6 +19,7 @@ JavaScript-клиентами.
 - единый порядок предпочтения транспортов;
 - общую тему и интервал PubSub discovery;
 - общий пул STUN-серверов WebRTC.
+- browser-safe кадрирование PTY-данных/resize и инкрементальное декодирование.
 
 Создание libp2p-узла, DHT, Web Worker RPC и stdin/stdout остаются в платформенных
 пакетах.
@@ -29,6 +30,10 @@ JavaScript-клиентами.
 |---|---|
 | `validateService(value)` | Проверяет логический порт `1..65535` |
 | `protocolForService(service)` | Строит `/p2p-netcat/1.0.0/{service}` |
+| `encodePtyData(value)` | Кадрирует клавиатурные или терминальные байты интерактивного сеанса |
+| `encodePtyResize(columns, rows)` | Кадрирует размеры терминала |
+| `decodePtyResize(value)` | Декодирует и проверяет размеры терминала |
+| `PtyFrameDecoder` | Инкрементально разбирает PTY-фреймы между transport chunks |
 | `normalizePeerId(value)` | Проверяет и канонизирует PeerId |
 | `normalizeMultiaddr(value)` | Проверяет и канонизирует multiaddr |
 | `normalizeRelayAddress(value, options)` | Проверяет relay, WS/WSS и secure-context ограничения |

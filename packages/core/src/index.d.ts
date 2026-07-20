@@ -7,6 +7,10 @@ export const TRYSTERO_APP_ID: "io.github.santaklouse.p2p-netcat.v1";
 export const TRYSTERO_AUTH_VERSION: 1;
 export const PUBSUB_DISCOVERY_TOPIC: "io.github.santaklouse.p2p-netcat.peer-discovery.v1";
 export const PUBSUB_DISCOVERY_INTERVAL_MS: 10000;
+export const PTY_FRAME_DATA: 0;
+export const PTY_FRAME_RESIZE: 1;
+export const PTY_FRAME_HEADER_LENGTH: 5;
+export const PTY_MAX_FRAME_LENGTH: 1048576;
 export const DEFAULT_STUN_URLS: readonly string[];
 
 export type P2PNetcatRtcConfiguration = {
@@ -32,6 +36,17 @@ export type AddressLike = string | { toString(): string } | { multiaddr: { toStr
 
 export function validateService(value?: unknown): number;
 export function protocolForService(service: unknown): string;
+export function encodePtyData(value: ArrayBuffer | ArrayBufferView): Uint8Array;
+export function encodePtyResize(columns: unknown, rows: unknown): Uint8Array;
+export function decodePtyResize(value: ArrayBuffer | ArrayBufferView): Readonly<{ columns: number; rows: number }>;
+
+export type PtyFrame = Readonly<{ type: number; data: Uint8Array }>;
+
+export class PtyFrameDecoder {
+  push(value: ArrayBuffer | ArrayBufferView): PtyFrame[];
+  finish(): void;
+  reset(): void;
+}
 export function normalizePeerId(value: unknown): string;
 export function normalizeMultiaddr(value: unknown): string;
 export function isWebSocketAddress(value: unknown): boolean;

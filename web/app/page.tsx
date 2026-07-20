@@ -1,5 +1,8 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from "react";
+import type { BrowserTerminalHandle } from "./browser-terminal";
 import { BrowserP2PClient } from "./p2p-client";
+
+const BrowserTerminal = lazy(() => import("./browser-terminal"));
 
 type ConnectionState = "idle" | "starting" | "connecting" | "connected" | "closed" | "error";
 type LogEntry = { id: number; time: string; message: string; kind: "info" | "success" | "error" };
@@ -24,6 +27,7 @@ export default function Home() {
   const [targetPeerId, setTargetPeerId] = useState("");
   const [relayAddress, setRelayAddress] = useState("");
   const [logicalPort, setLogicalPort] = useState(31337);
+  const [interactive, setInteractive] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
   const [localPeerId, setLocalPeerId] = useState("");
   const [message, setMessage] = useState("");
@@ -36,7 +40,8 @@ export default function Home() {
   const clientRef = useRef<BrowserP2PClient | null>(null);
   const receivedChunks = useRef<ArrayBuffer[]>([]);
   const decoder = useRef(new TextDecoder());
-  const terminalRef = useRef<HTMLPreElement | null>(null);
+  const transcriptRef = useRef<HTMLPreElement | null>(null);
+  const browserTerminalRef = useRef<BrowserTerminalHandle | null>(null);
   const terminalSequence = useRef(0);
 
   const addLog = (text: string, kind: "info" | "success" | "error" = "info") => {
@@ -50,19 +55,22 @@ export default function Home() {
     const savedRelay = window.localStorage.getItem("p2p-netcat-relay");
     if (savedRelay) setRelayAddress(savedRelay);
     setShowSentText(window.localStorage.getItem("p2p-netcat-show-sent") === "true");
+    setInteractive(window.localStorage.getItem("p2p-netcat-interactive") === "true");
     return () => {
       void clientRef.current?.stop();
     };
   }, []);
 
   useEffect(() => {
-    terminalRef.current?.scrollTo({ top: terminalRef.current.scrollHeight, behavior: "smooth" });
+    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
   }, [terminalEntries, showSentText]);
 
   const connect = async (event: FormEvent) => {
     event.preventDefault();
     if (connectionState === "connecting" || connectionState === "starting") return;
 
+    await clientRef.current?.stop();
+    clientRef.current = null;
     setConnectionState("starting");
     setTerminalEntries([]);
     setReceivedBytes(0);
@@ -70,11 +78,16 @@ export default function Home() {
     receivedChunks.current = [];
     decoder.current = new TextDecoder();
     terminalSequence.current = 0;
+    browserTerminalRef.current?.clear();
 
     const client = new BrowserP2PClient({
       onData: (bytes) => {
         receivedChunks.current.push(bytes.slice().buffer as ArrayBuffer);
         setReceivedBytes((value) => value + bytes.byteLength);
+        if (interactive) {
+          browserTerminalRef.current?.write(bytes);
+          return;
+        }
         const text = decoder.current.decode(bytes, { stream: true });
         if (text) {
           setTerminalEntries((current) => [
@@ -93,8 +106,10 @@ export default function Home() {
       setConnectionState("connecting");
       if (relayAddress.trim()) window.localStorage.setItem("p2p-netcat-relay", relayAddress.trim());
       else window.localStorage.removeItem("p2p-netcat-relay");
-      await client.connect(targetPeerId, logicalPort, relayAddress);
+      window.localStorage.setItem("p2p-netcat-interactive", String(interactive));
+      await client.connect(targetPeerId, logicalPort, relayAddress, interactive);
       setConnectionState("connected");
+      if (interactive) addLog("PTY-протокол включён; ввод передаётся напрямую с клавиатуры", "success");
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
       addLog(text, "error");
@@ -111,6 +126,16 @@ export default function Home() {
     addLog("Соединение закрыто");
   };
 
+  const exitInteractive = async () => {
+    try {
+      await clientRef.current?.closeWrite();
+      addLog("PTY EOF отправлен; ожидаем завершение удалённой оболочки");
+    } catch (error) {
+      addLog(error instanceof Error ? error.message : String(error), "error");
+      await disconnect();
+    }
+  };
+
   const sendMessage = async () => {
     if (!message || connectionState !== "connected") return;
     const payload = `${message}\n`;
@@ -124,6 +149,20 @@ export default function Home() {
       setTerminalEntries((current) => current.filter((entry) => entry.id !== entryId));
       addLog(error instanceof Error ? error.message : String(error), "error");
     }
+  };
+
+  const sendTerminalInput = (bytes: Uint8Array) => {
+    void clientRef.current?.send(bytes).then(() => {
+      setSentBytes((value) => value + bytes.byteLength);
+    }).catch((error) => {
+      addLog(error instanceof Error ? error.message : String(error), "error");
+    });
+  };
+
+  const resizeTerminal = (columns: number, rows: number) => {
+    void clientRef.current?.resize(columns, rows).catch((error) => {
+      addLog(error instanceof Error ? error.message : String(error), "error");
+    });
   };
 
   const sendFile = async (file: File | undefined) => {
@@ -236,6 +275,19 @@ export default function Home() {
               />
             </label>
 
+            <label className="interactive-mode">
+              <input
+                type="checkbox"
+                checked={interactive}
+                onChange={(event) => setInteractive(event.target.checked)}
+                disabled={connectionState === "starting" || connectionState === "connecting" || connected}
+              />
+              <span>
+                Интерактивный PTY <code>-i</code>
+                <small>Включите, если сервер запущен командой <code>p2p-nc -l -i</code></small>
+              </span>
+            </label>
+
             {!connected ? (
               <button className="primary-button" type="submit" disabled={!targetPeerId || connectionState === "starting" || connectionState === "connecting"}>
                 <span>Подключиться</span><span aria-hidden="true">↗</span>
@@ -260,58 +312,79 @@ export default function Home() {
           <div className="terminal-toolbar">
             <div className="window-dots" aria-hidden="true"><i /><i /><i /></div>
             <span className="terminal-address">p2p://{targetPeerId ? `${targetPeerId}` : "not-connected"}:{logicalPort}</span>
-            <label className="terminal-echo-toggle">
-              <input
-                type="checkbox"
-                checked={showSentText}
-                onChange={(event) => {
-                  const checked = event.target.checked;
-                  setShowSentText(checked);
-                  window.localStorage.setItem("p2p-netcat-show-sent", String(checked));
-                }}
-              />
-              <span className="toggle-track" aria-hidden="true"><span /></span>
-              <span>Показывать отправленное</span>
-            </label>
+            {interactive ? (
+              <span className="pty-mode-label">PTY · Ctrl-E Q — выход</span>
+            ) : (
+              <label className="terminal-echo-toggle">
+                <input
+                  type="checkbox"
+                  checked={showSentText}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setShowSentText(checked);
+                    window.localStorage.setItem("p2p-netcat-show-sent", String(checked));
+                  }}
+                />
+                <span className="toggle-track" aria-hidden="true"><span /></span>
+                <span>Показывать отправленное</span>
+              </label>
+            )}
             <div className="traffic-stats">
               <span>↑ {formatBytes(sentBytes)}</span><span>↓ {formatBytes(receivedBytes)}</span>
             </div>
           </div>
 
-          <pre className="terminal-output" ref={terminalRef} aria-live="polite">
-            {visibleTerminalEntries.length > 0
-              ? visibleTerminalEntries.map((entry) => (
-                <span key={entry.id} className={`terminal-${entry.direction}`}>{entry.text}</span>
-              ))
-              : <span className="terminal-empty">Ожидание данных…{`\n`}После соединения вывод удалённого процесса появится здесь.</span>}
-          </pre>
+          {interactive ? (
+            <Suspense fallback={<div className="browser-terminal-loading">Загрузка PTY-терминала…</div>}>
+              <BrowserTerminal
+                ref={browserTerminalRef}
+                connected={connected}
+                onInput={sendTerminalInput}
+                onResize={resizeTerminal}
+                onExit={() => void exitInteractive()}
+              />
+            </Suspense>
+          ) : (
+            <>
+              <pre className="terminal-output" ref={transcriptRef} aria-live="polite">
+                {visibleTerminalEntries.length > 0
+                  ? visibleTerminalEntries.map((entry) => (
+                    <span key={entry.id} className={`terminal-${entry.direction}`}>{entry.text}</span>
+                  ))
+                  : <span className="terminal-empty">Ожидание данных…{`\n`}После соединения вывод удалённого процесса появится здесь.</span>}
+              </pre>
 
-          <div className="composer">
-            <textarea
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                  event.preventDefault();
-                  void sendMessage();
-                }
-              }}
-              disabled={!connected}
-              aria-label="Данные для отправки"
-              rows={3}
-            />
-            <button type="button" className="send-button" disabled={!connected || !message} onClick={() => void sendMessage()}>
-              Отправить <kbd>⌘↵</kbd>
-            </button>
-          </div>
+              <div className="composer">
+                <textarea
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                      event.preventDefault();
+                      void sendMessage();
+                    }
+                  }}
+                  disabled={!connected}
+                  aria-label="Данные для отправки"
+                  rows={3}
+                />
+                <button type="button" className="send-button" disabled={!connected || !message} onClick={() => void sendMessage()}>
+                  Отправить <kbd>⌘↵</kbd>
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="transfer-bar">
-            <label className={`file-button ${!connected ? "disabled" : ""}`}>
-              <input type="file" disabled={!connected} onChange={(event) => void sendFile(event.target.files?.[0])} />
-              <span aria-hidden="true">＋</span> Отправить файл
-            </label>
+            {!interactive && (
+              <label className={`file-button ${!connected ? "disabled" : ""}`}>
+                <input type="file" disabled={!connected} onChange={(event) => void sendFile(event.target.files?.[0])} />
+                <span aria-hidden="true">＋</span> Отправить файл
+              </label>
+            )}
             <button type="button" disabled={!connected} onClick={() => void clientRef.current?.closeWrite()}>Отправить EOF</button>
             <button type="button" disabled={receivedBytes === 0} onClick={downloadReceived}>Скачать приём</button>
+            {interactive && <span className="pty-help">Кликните терминал и печатайте; Enter и управляющие клавиши передаются напрямую</span>}
             {fileProgress && <span className="file-progress">{fileProgress}</span>}
           </div>
         </div>
@@ -327,7 +400,7 @@ export default function Home() {
       </section>
 
       <footer>
-        <p>p2p-netcat web <span>v0.1.1</span></p>
+        <p>p2p-netcat web <span>v0.3.0</span></p>
         <p>Delegated Routing · IPFS DHT · WSS · Noise · Yamux</p>
       </footer>
     </main>

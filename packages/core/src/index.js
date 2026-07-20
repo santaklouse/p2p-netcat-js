@@ -8,6 +8,10 @@ export const TRYSTERO_APP_ID = 'io.github.santaklouse.p2p-netcat.v1'
 export const TRYSTERO_AUTH_VERSION = 1
 export const PUBSUB_DISCOVERY_TOPIC = 'io.github.santaklouse.p2p-netcat.peer-discovery.v1'
 export const PUBSUB_DISCOVERY_INTERVAL_MS = 10_000
+export const PTY_FRAME_DATA = 0
+export const PTY_FRAME_RESIZE = 1
+export const PTY_FRAME_HEADER_LENGTH = 5
+export const PTY_MAX_FRAME_LENGTH = 1024 * 1024
 export const DEFAULT_STUN_URLS = Object.freeze([
   'stun:stun.l.google.com:19302',
   'stun:stun1.l.google.com:19302',
@@ -38,6 +42,59 @@ export function validateService (value = DEFAULT_SERVICE) {
 
 export function protocolForService (service) {
   return `${PROTOCOL_PREFIX}/${validateService(service)}`
+}
+
+export function encodePtyData (value) {
+  return encodePtyFrame(PTY_FRAME_DATA, value)
+}
+
+export function encodePtyResize (columns, rows) {
+  const payload = new Uint8Array(4)
+  const view = new DataView(payload.buffer)
+  view.setUint16(0, normalizePtyDimension(columns, 80))
+  view.setUint16(2, normalizePtyDimension(rows, 24))
+  return encodePtyFrame(PTY_FRAME_RESIZE, payload)
+}
+
+export function decodePtyResize (value) {
+  const payload = asBytes(value)
+  if (payload.byteLength !== 4) throw new Error(`PTY resize payload must contain 4 bytes, received: ${payload.byteLength}`)
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength)
+  return Object.freeze({ columns: Math.max(1, view.getUint16(0)), rows: Math.max(1, view.getUint16(2)) })
+}
+
+export class PtyFrameDecoder {
+  #buffer = new Uint8Array(0)
+
+  push (value) {
+    const chunk = asBytes(value)
+    const combined = new Uint8Array(this.#buffer.byteLength + chunk.byteLength)
+    combined.set(this.#buffer)
+    combined.set(chunk, this.#buffer.byteLength)
+    this.#buffer = combined
+
+    const frames = []
+    while (this.#buffer.byteLength >= PTY_FRAME_HEADER_LENGTH) {
+      const view = new DataView(this.#buffer.buffer, this.#buffer.byteOffset, this.#buffer.byteLength)
+      const length = view.getUint32(1)
+      if (length > PTY_MAX_FRAME_LENGTH) throw new Error(`PTY frame exceeds ${PTY_MAX_FRAME_LENGTH} bytes`)
+      if (this.#buffer.byteLength < PTY_FRAME_HEADER_LENGTH + length) break
+      frames.push(Object.freeze({
+        type: this.#buffer[0],
+        data: this.#buffer.slice(PTY_FRAME_HEADER_LENGTH, PTY_FRAME_HEADER_LENGTH + length)
+      }))
+      this.#buffer = this.#buffer.slice(PTY_FRAME_HEADER_LENGTH + length)
+    }
+    return frames
+  }
+
+  finish () {
+    if (this.#buffer.byteLength !== 0) throw new Error('PTY stream ended inside a frame')
+  }
+
+  reset () {
+    this.#buffer = new Uint8Array(0)
+  }
 }
 
 export function normalizePeerId (value) {
@@ -285,6 +342,23 @@ export class TrysteroStream {
 function addressText (address) {
   if (address?.multiaddr != null) return address.multiaddr.toString()
   return address?.toString?.() ?? String(address)
+}
+
+function encodePtyFrame (type, value) {
+  const payload = asBytes(value)
+  if (payload.byteLength > PTY_MAX_FRAME_LENGTH) throw new Error(`PTY frame exceeds ${PTY_MAX_FRAME_LENGTH} bytes`)
+  const result = new Uint8Array(PTY_FRAME_HEADER_LENGTH + payload.byteLength)
+  const view = new DataView(result.buffer)
+  result[0] = type
+  view.setUint32(1, payload.byteLength)
+  result.set(payload, PTY_FRAME_HEADER_LENGTH)
+  return result
+}
+
+function normalizePtyDimension (value, fallback) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Math.max(1, Math.min(0xffff, Math.trunc(numeric)))
 }
 
 function asBytes (value) {

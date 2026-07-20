@@ -23,12 +23,13 @@ test("собирается как статическая PWA без сервер
 });
 
 test("сетевой стек работает в отдельном Web Worker", async () => {
-  const [worker, client, trystero, core, page, main, styles] = await Promise.all([
+  const [worker, client, trystero, core, page, terminal, main, styles] = await Promise.all([
     readFile(new URL("../app/p2p.worker.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/p2p-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/trystero-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../../packages/core/src/index.js", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/browser-terminal.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/main.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
@@ -36,6 +37,9 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(worker, /@santaklouse\/p2p-netcat-core/);
   assert.doesNotMatch(worker, /const PROTOCOL_PREFIX/);
   assert.match(core, /\/p2p-netcat\/1\.0\.0/);
+  assert.match(core, /class PtyFrameDecoder/);
+  assert.match(core, /encodePtyData/);
+  assert.match(core, /encodePtyResize/);
   assert.match(worker, /circuitRelayTransport\(\)/);
   assert.match(worker, /webSockets\(\)/);
   assert.match(worker, /webTransport\(\)/);
@@ -63,6 +67,16 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(page, /Показывать отправленное/);
   assert.match(page, /entry\.direction === "received"/);
   assert.match(page, /p2p-netcat-show-sent/);
+  assert.match(page, /Интерактивный PTY/);
+  assert.match(page, /p2p-netcat-interactive/);
+  assert.match(page, /lazy\(\(\) => import\("\.\/browser-terminal"\)\)/);
+  assert.match(client, /PtyFrameDecoder/);
+  assert.match(client, /encodePtyData/);
+  assert.match(client, /encodePtyResize/);
+  assert.match(terminal, /@xterm\/xterm/);
+  assert.match(terminal, /@xterm\/addon-fit/);
+  assert.match(terminal, /character === "q"/);
   assert.match(styles, /\.terminal-echo-toggle/);
   assert.match(styles, /\.terminal-sent/);
+  assert.match(styles, /\.browser-terminal/);
 });
