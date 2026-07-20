@@ -8,6 +8,7 @@ export type RelayOptions = {
   ipVersion?: 4 | 6
   announce?: readonly string[]
   enableMdns?: boolean
+  enablePubsub?: boolean
   enableQuic?: boolean
 }
 

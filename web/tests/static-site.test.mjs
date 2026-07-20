@@ -41,6 +41,9 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(worker, /webTransport\(\)/);
   assert.match(worker, /delegated-ipfs\.dev\/routing\/v1/);
   assert.match(worker, /kadDHT\(/);
+  assert.match(worker, /pubsubPeerDiscovery\(/);
+  assert.match(worker, /gossipsub\(/);
+  assert.match(worker, /PUBSUB_DISCOVERY_TOPIC/);
   assert.match(worker, /indexedDB\.open/);
   assert.match(worker, /workerScope\.crypto\?\.subtle/);
   assert.match(worker, /Откройте приложение по HTTPS/);
@@ -49,6 +52,9 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(trystero, /@trystero-p2p\/torrent/);
   assert.match(trystero, /trysteroAuthPayload/);
   assert.match(trystero, /peerIdFromPublicKey/);
+  assert.match(trystero, /defaultRtcConfiguration/);
+  assert.match(core, /stun:stun\.l\.google\.com:19302/);
+  assert.match(core, /stun:stun\.internetcalls\.com:3478/);
   assert.match(client, /transfer/);
   assert.match(page, /Необязательно · используется автопоиск/);
   assert.doesNotMatch(page, /!targetPeerId \|\| !relayAddress/);

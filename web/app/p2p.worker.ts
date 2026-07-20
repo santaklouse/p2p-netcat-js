@@ -8,11 +8,15 @@ import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import { identify } from "@libp2p/identify";
 import { ping } from "@libp2p/ping";
+import { gossipsub } from "@libp2p/gossipsub";
+import { pubsubPeerDiscovery } from "@libp2p/pubsub-peer-discovery";
 import { bootstrap } from "@libp2p/bootstrap";
 import { kadDHT, removePrivateAddressesMapper } from "@libp2p/kad-dht";
 import { peerIdFromString } from "@libp2p/peer-id";
 import { multiaddr, type Multiaddr } from "@multiformats/multiaddr";
 import {
+  PUBSUB_DISCOVERY_INTERVAL_MS,
+  PUBSUB_DISCOVERY_TOPIC,
   browserDialableAddress,
   createRelayDialPlan,
   isWebSocketAddress,
@@ -271,13 +275,22 @@ async function startNode() {
     services: {
       identify: identify(),
       ping: ping(),
+      pubsub: gossipsub({
+        allowPublishToZeroTopicPeers: true,
+      }),
       aminoDHT: kadDHT({
         protocol: "/ipfs/kad/1.0.0",
         clientMode: true,
         peerInfoMapper: removePrivateAddressesMapper,
       }),
     },
-    peerDiscovery: [bootstrap({ list: [...IPFS_BOOTSTRAP_PEERS], timeout: 10_000 })],
+    peerDiscovery: [
+      bootstrap({ list: [...IPFS_BOOTSTRAP_PEERS], timeout: 10_000 }),
+      pubsubPeerDiscovery({
+        interval: PUBSUB_DISCOVERY_INTERVAL_MS,
+        topics: [PUBSUB_DISCOVERY_TOPIC],
+      }),
+    ],
     connectionGater: {
       denyDialMultiaddr: () => false,
     },
@@ -326,7 +339,7 @@ async function connect(payload: Record<string, unknown>) {
       }
     }
 
-    if (stream == null) postLog(`Ищем ${targetPeerId}:${service} автоматически через delegated routing и IPFS DHT…`);
+    if (stream == null) postLog(`Ищем ${targetPeerId}:${service} через подписанный PubSub, delegated routing и IPFS DHT…`);
     if (stream == null) {
       const config = await loadNetworkConfig();
       const delegated = await delegatedAddresses(target, config.delegatedRouting);

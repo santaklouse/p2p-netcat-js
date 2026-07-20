@@ -13,7 +13,8 @@ HTML, CSS, JavaScript, a Web Worker, a Service Worker, a manifest, and images.
 ## Features
 
 - connection to a CLI server by `PeerId` and logical port;
-- automatic lookup through HTTP Delegated Routing and IPFS Amino DHT;
+- automatic lookup through signed GossipSub announcements, HTTP Delegated
+  Routing, and IPFS Amino DHT;
 - direct Trystero/WebRTC fallback through public WebTorrent trackers;
 - WebTransport or WebSocket/WSS through libp2p Circuit Relay v2;
 - an optional manual relay multiaddr as an emergency override;
@@ -34,12 +35,13 @@ the terminal UI, and the PWA/Service Worker remain in the web project. This
 architecture runs no server-side JavaScript.
 
 When the relay field is empty, Trystero/WebRTC and the Worker start
-simultaneously. The Worker resolves the PeerId through
-`https://delegated-ipfs.dev/routing/v1` and then uses DHT as a fallback. The
+simultaneously. The Worker listens for signed announcements on the app-specific
+GossipSub topic, resolves the PeerId through
+`https://delegated-ipfs.dev/routing/v1`, and then uses DHT as a fallback. The
 first authenticated channel wins. A successful libp2p route is cached in
 IndexedDB for 24 hours. The WebRTC server proves the entered PeerId with a
-signed Ed25519 challenge. `public/network-config.json` can add compatible routing
-endpoints and a hidden WSS relay pool without changing the UI:
+signed Ed25519 challenge. `public/network-config.json` can add compatible
+routing endpoints and a hidden WSS relay pool without changing the UI:
 
 ```json
 {
@@ -53,6 +55,44 @@ endpoints and a hidden WSS relay pool without changing the UI:
 The `.npmrc` file enables `install-links=true`. This copies the local package
 into `node_modules` during `npm ci`, so a clean GitHub Actions build does not
 depend on packages previously installed at the repository root.
+
+## PubSub discovery and WebRTC STUN
+
+The Worker and CLI use the same topic:
+`io.github.santaklouse.p2p-netcat.peer-discovery.v1`. The
+`@libp2p/pubsub-peer-discovery` service periodically publishes the node public
+key and current multiaddrs. GossipSub uses strict message signing by default;
+the receiver derives the PeerId from the included public key before accepting
+the addresses into its peer store. This does not make the announcement trusted:
+the final libp2p handshake still has to prove the requested PeerId. Only
+browser-dialable WSS/WebTransport/WebRTC addresses become web dial candidates.
+
+PubSub is not a bootstrap mechanism by itself. An announcement can reach the
+browser only after it has connected to a compatible subscriber on the same
+topic. Public generic IPFS bootstrap peers are not guaranteed to join or carry
+this application topic. A p2p-netcat relay participates in the topic by
+default, so an already reachable relay can also forward discovery messages.
+
+Both browser and Node Trystero clients use this ICE/STUN pool:
+
+```text
+stun:stun.l.google.com:19302
+stun:stun1.l.google.com:19302
+stun:stun2.l.google.com:19302
+stun:stun3.l.google.com:19302
+stun:stun4.l.google.com:19302
+stun:stun.counterpath.com:3478
+stun:stun.sipgate.net:3478
+stun:stun.voipbuster.com:3478
+stun:stun.internetcalls.com:3478
+```
+
+STUN servers learn public NAT mappings and do not carry application bytes.
+They are third-party services and may observe source IP addresses and request
+timing. STUN does not relay traffic and therefore cannot guarantee WebRTC
+connectivity through symmetric NAT or networks that block UDP; the existing
+Circuit Relay path remains the deterministic fallback when a reachable relay
+is configured.
 
 ## Installation and build
 

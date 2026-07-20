@@ -5,7 +5,7 @@
 Node.js-пакет предоставляет отдельную точку входа relay:
 
 ```js
-import { startRelay } from 'p2p-netcat/relay'
+import { startRelay } from '@santaklouse/p2p-netcat/relay'
 ```
 
 Эта точка входа работает только в Node.js. Она не входит в браузерно-безопасный
@@ -16,7 +16,7 @@ import { startRelay } from 'p2p-netcat/relay'
 После публикации текущей версии пакета:
 
 ```bash
-npm install p2p-netcat
+npm install @santaklouse/p2p-netcat
 ```
 
 Внутри этого репозитория npm workspaces разрешают ту же точку входа без
@@ -25,7 +25,7 @@ npm install p2p-netcat
 ## Полный пример
 
 ```js
-import { startRelay } from 'p2p-netcat/relay'
+import { startRelay } from '@santaklouse/p2p-netcat/relay'
 
 const announce = (process.env.P2P_RELAY_ANNOUNCE ?? '')
   .split(',')
@@ -38,6 +38,7 @@ const relay = await startRelay({
   websocketPort: 9091,
   announce,
   enableMdns: false,
+  enablePubsub: true,
   enableQuic: true
 })
 
@@ -72,7 +73,14 @@ process.once('SIGTERM', () => void shutdown('SIGTERM'))
 | `ipVersion` | обе версии | Значение `4` или `6` ограничивает слушатели выбранной версией IP. |
 | `announce` | `[]` | Публичные multiaddr вместо использования только наблюдаемых адресов интерфейсов. |
 | `enableMdns` | `true` | Включает обнаружение в LAN. |
+| `enablePubsub` | `true` | Включает подписанные GossipSub-объявления в теме p2p-netcat. |
 | `enableQuic` | `true` | Включает QUIC v1 вместе с TCP. |
+
+При включённом PubSub relay одновременно становится участником совместимой
+discovery mesh. Он может передавать подписанные объявления между подключёнными
+узлами p2p-netcat, но не превращается в центральный каталог: узлам всё равно
+нужен начальный маршрут хотя бы к одному участнику той же GossipSub mesh. Для
+relay без этой роли передайте `enablePubsub: false`.
 
 Возвращённый объект содержит:
 

@@ -7,7 +7,7 @@ import { generateKeyPair, publicKeyFromProtobuf, publicKeyToProtobuf } from '@li
 import { peerIdFromPrivateKey, peerIdFromPublicKey } from '@libp2p/peer-id'
 import { createP2PNode } from '../src/node.js'
 import { loadOrCreateIdentity } from '../src/identity.js'
-import { startRelay } from 'p2p-netcat/relay'
+import { startRelay } from '@santaklouse/p2p-netcat/relay'
 import {
   decodeTrysteroAuthResponse,
   encodeTrysteroAuthResponse,
@@ -143,6 +143,48 @@ test('два локальных узла передают двунаправле
     assert.deepEqual(response, [...payload].map(byte => byte ^ 0xff))
   } finally {
     await Promise.allSettled([client.stop(), server.stop()])
+  }
+})
+
+test('GossipSub обнаруживает PeerId через промежуточный совместимый узел', async () => {
+  const nodeOptions = async () => ({
+    privateKey: await generateKeyPair('Ed25519'),
+    localPort: 0,
+    ipVersion: 4,
+    bootstrapPeers: [],
+    enableDht: false,
+    enableMdns: false,
+    enablePubsub: true,
+    pubsubIntervalMs: 200,
+    enableQuic: false,
+    relays: []
+  })
+  const hub = await createP2PNode(await nodeOptions())
+  const seeker = await createP2PNode(await nodeOptions())
+  const target = await createP2PNode(await nodeOptions())
+
+  try {
+    const discovered = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('PubSub discovery timeout')), 8_000)
+      seeker.addEventListener('peer:discovery', event => {
+        if (!event.detail.id.equals(target.peerId)) return
+        clearTimeout(timeout)
+        resolve(event.detail)
+      })
+    })
+    const hubAddress = hub.getMultiaddrs().find(address => (
+      address.toString().includes('/ip4/127.0.0.1/') && address.toString().includes('/tcp/')
+    ))
+    assert.ok(hubAddress, 'промежуточный узел должен слушать localhost TCP')
+
+    await Promise.all([seeker.dial(hubAddress), target.dial(hubAddress)])
+    const peer = await discovered
+
+    assert.equal(peer.id.toString(), target.peerId.toString())
+    assert.ok(peer.multiaddrs.length > 0)
+    assert.ok((await seeker.peerStore.get(target.peerId)).addresses.length > 0)
+  } finally {
+    await Promise.allSettled([seeker.stop(), target.stop(), hub.stop()])
   }
 })
 

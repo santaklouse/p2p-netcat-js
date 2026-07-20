@@ -6,6 +6,25 @@ export const PROTOCOL_PREFIX = '/p2p-netcat/1.0.0'
 export const DEFAULT_SERVICE = 31337
 export const TRYSTERO_APP_ID = 'io.github.santaklouse.p2p-netcat.v1'
 export const TRYSTERO_AUTH_VERSION = 1
+export const PUBSUB_DISCOVERY_TOPIC = 'io.github.santaklouse.p2p-netcat.peer-discovery.v1'
+export const PUBSUB_DISCOVERY_INTERVAL_MS = 10_000
+export const DEFAULT_STUN_URLS = Object.freeze([
+  'stun:stun.l.google.com:19302',
+  'stun:stun1.l.google.com:19302',
+  'stun:stun2.l.google.com:19302',
+  'stun:stun3.l.google.com:19302',
+  'stun:stun4.l.google.com:19302',
+  'stun:stun.counterpath.com:3478',
+  'stun:stun.sipgate.net:3478',
+  'stun:stun.voipbuster.com:3478',
+  'stun:stun.internetcalls.com:3478'
+])
+
+export function defaultRtcConfiguration () {
+  return {
+    iceServers: [{ urls: [...DEFAULT_STUN_URLS] }]
+  }
+}
 
 export function validateService (value = DEFAULT_SERVICE) {
   const service = Number(value)

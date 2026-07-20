@@ -1,10 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  DEFAULT_STUN_URLS,
+  PUBSUB_DISCOVERY_INTERVAL_MS,
+  PUBSUB_DISCOVERY_TOPIC,
   TrysteroStream,
   browserDialableAddress,
   createRelayDialPlan,
   decodeTrysteroAuthResponse,
+  defaultRtcConfiguration,
   encodeTrysteroAuthResponse,
   normalizeRelayAddress,
   preferDialAddresses,
@@ -13,6 +17,27 @@ import {
   trysteroRoomId,
   validateService
 } from '../src/index.js'
+
+test('общая сеть использует одну PubSub-тему и переданный STUN-пул', () => {
+  assert.equal(PUBSUB_DISCOVERY_TOPIC, 'io.github.santaklouse.p2p-netcat.peer-discovery.v1')
+  assert.equal(PUBSUB_DISCOVERY_INTERVAL_MS, 10_000)
+  assert.deepEqual(DEFAULT_STUN_URLS, [
+    'stun:stun.l.google.com:19302',
+    'stun:stun1.l.google.com:19302',
+    'stun:stun2.l.google.com:19302',
+    'stun:stun3.l.google.com:19302',
+    'stun:stun4.l.google.com:19302',
+    'stun:stun.counterpath.com:3478',
+    'stun:stun.sipgate.net:3478',
+    'stun:stun.voipbuster.com:3478',
+    'stun:stun.internetcalls.com:3478'
+  ])
+
+  const first = defaultRtcConfiguration()
+  const second = defaultRtcConfiguration()
+  assert.deepEqual(first.iceServers[0].urls, DEFAULT_STUN_URLS)
+  assert.notEqual(first.iceServers[0].urls, second.iceServers[0].urls)
+})
 
 test('общая библиотека валидирует логический порт и protocol id', () => {
   assert.equal(validateService('8080'), 8080)

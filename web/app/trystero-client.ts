@@ -7,6 +7,7 @@ import {
   TRYSTERO_APP_ID,
   TrysteroStream,
   decodeTrysteroAuthResponse,
+  defaultRtcConfiguration,
   trysteroAuthPayload,
   trysteroRoomId,
 } from "@santaklouse/p2p-netcat-core";
@@ -41,6 +42,7 @@ export class BrowserTrysteroClient {
 
     const room = joinRoom({
       appId: TRYSTERO_APP_ID,
+      rtcConfig: defaultRtcConfiguration(),
       relayConfig: {
         warnOnRelayFailure: false,
       },

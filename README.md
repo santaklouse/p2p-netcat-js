@@ -17,7 +17,9 @@ Amino DHT, mDNS, and Circuit Relay v2.
 - [Shared JavaScript library API](packages/core/README.md) — exported functions
   from `@santaklouse/p2p-netcat-core`;
 - [Programmatic Circuit Relay API](docs/RELAY_API.md) — start and stop a relay
-  from another Node.js application through `p2p-netcat/relay`.
+  from another Node.js application through `@santaklouse/p2p-netcat/relay`.
+- [gs-netcat-compatible modes](docs/GS_NETCAT_COMPAT.md) — `-d`, `-p`, `-q`,
+  `-S`, `-T`, and `-i`, including forwarding, SOCKS, PTY, and Tor routing.
 
 ## What already works
 
@@ -25,12 +27,15 @@ Amino DHT, mDNS, and Circuit Relay v2.
 - QUIC v1 as the preferred direct transport, with automatic TCP fallback;
 - A stable server PeerId derived from a local Ed25519 key;
 - Logical ports, allowing one PeerId to expose multiple services;
-- PeerId-only discovery on a LAN through mDNS and over the internet through the
+- PeerId-only discovery through mDNS, signed GossipSub announcements, and the
   IPFS Amino DHT;
 - a direct Trystero/WebRTC fallback signalled through public WebTorrent trackers;
+- a shared nine-endpoint STUN pool for CLI and browser WebRTC NAT traversal;
 - Circuit Relay v2 connections for nodes behind NAT;
 - A built-in relay mode;
-- `-l`, `-k`, `-w`, `-q`, `-z`, `-e`, `-p`, `-4`, `-6`, and verbose mode;
+- gs-netcat-style TCP forwarding, SOCKS4/4a/5, quiet, Tor, and true PTY modes;
+- `-l`, `-k`, `-w`, `-d`, `-p`, `-q`, `-S`, `-T`, `-i`, `-z`, `-e`, `-4`,
+  `-6`, and verbose mode;
 - Authenticated encryption through QUIC TLS 1.3 or Noise, including connections
   through a relay.
 
@@ -41,11 +46,13 @@ does use UDP underneath, but it still provides a reliable, ordered stream.
 
 Node.js 22 or newer is required. The QUIC transport uses a native N-API module
 with prebuilt binaries for mainstream macOS, Linux, and Windows platforms.
+Interactive `-i` uses the native `node-pty` module; on Linux, installing from
+npm may require Python, `make`, and a C/C++ compiler for `node-gyp`.
 
 Install the published CLI from npm:
 
 ```bash
-npm install --global p2p-netcat
+npm install --global @santaklouse/p2p-netcat
 ```
 
 For development from source:
@@ -58,9 +65,11 @@ npm link
 After `npm link`, both commands are available: `p2p-nc` and the shorter `pnc`.
 
 QUIC is enabled by default. Use `--no-quic` only for diagnostics or on a system
-where the native QUIC module is unavailable. The `-p` option uses the same
-numeric port for TCP and UDP; when it is `0`, the operating system chooses each
-port independently.
+where the native QUIC module is unavailable. `-p` now follows gs-netcat and is
+used for TCP forwarding. The internal libp2p TCP/UDP listen port is configured
+with `--transport-port`; when it is `0`, the operating system chooses each port
+independently. `-i` now means interactive PTY, so the short identity option is
+`-I` while `--identity` remains unchanged.
 
 ## Quick start
 
@@ -153,7 +162,7 @@ The same relay can be embedded into another Node.js process without spawning
 the CLI:
 
 ```js
-import { startRelay } from 'p2p-netcat/relay'
+import { startRelay } from '@santaklouse/p2p-netcat/relay'
 
 const relay = await startRelay({
   identityPath: './data/p2p-netcat-relay.key',
@@ -197,8 +206,16 @@ base URL.
 
 The browser does not require a relay address by default. It starts two paths in
 parallel: Trystero/WebRTC through public WebTorrent trackers, and libp2p lookup
-through HTTP Delegated Routing with IPFS Amino DHT fallback. The first
-authenticated channel wins. Discovered libp2p multiaddrs are also raced.
+through signed GossipSub announcements, HTTP Delegated Routing, and IPFS Amino
+DHT fallback. The first authenticated channel wins. Discovered libp2p
+multiaddrs are also raced.
+
+GossipSub discovery is enabled by default in CLI nodes, relays, and the browser
+Worker. Use `--no-pubsub` on the CLI or relay command to disable it. It is an
+additional discovery path, not a global rendezvous guarantee: both peers need
+connectivity to a compatible GossipSub mesh. Trystero uses the shared STUN pool
+to improve direct NAT traversal; STUN alone cannot replace TURN or Circuit
+Relay when both sides are behind restrictive NAT.
 
 If the server advertises only TCP/QUIC addresses or automatic discovery cannot
 find a usable route, expand the advanced settings and provide a WebSocket relay:
@@ -238,6 +255,56 @@ const plan = createRelayDialPlan({
 })
 ```
 
+## gs-netcat-style modes
+
+Expose `192.168.6.7:22` on the server side and listen locally on client port
+`2222`. Every local TCP connection receives an independent P2P stream:
+
+```bash
+# Server side
+p2p-nc -l -d 192.168.6.7 -p 22 31337
+
+# Client side
+p2p-nc -p 2222 12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9 31337
+ssh -p 2222 root@127.0.0.1
+```
+
+Run a SOCKS4/4a/5 proxy on the remote node and expose it as local port `1080`:
+
+```bash
+# Server side
+p2p-nc -l -S 31337
+
+# Client side
+p2p-nc -p 1080 12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9 31337
+curl --proxy socks5h://127.0.0.1:1080 https://example.com/
+```
+
+Open a real PTY login shell. Terminal resize and control bytes are forwarded;
+press `Ctrl-e q` to disconnect the client:
+
+```bash
+p2p-nc -l -i 31337
+p2p-nc -i 12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9 31337
+```
+
+`-q` suppresses diagnostics on stderr without changing application bytes.
+`-T` re-executes the client under `torsocks`, disables direct QUIC/WebRTC and
+automatic discovery, and therefore requires an explicit TCP/WS/WSS Circuit
+Relay route:
+
+```bash
+P2P_NETCAT_TOR_HOST=127.0.0.1 \
+P2P_NETCAT_TOR_PORT=9050 \
+p2p-nc -T \
+  --relay /ip4/203.0.113.10/tcp/9090/p2p/12D3KooWEqeQRAJ61HSv9yMPk8yzjke7NxmTFcvFt4GzwXxzVjXW \
+  12D3KooWQ3uxpHgjDKE6vGmvzKS8RPbxUDLwJ7XCLaD6YXdUfbR9 31337
+```
+
+`Tor`, `torsocks`, and a reachable relay are required. See the
+[complete compatibility guide](docs/GS_NETCAT_COMPAT.md) for mode validation,
+security boundaries, and environment variables.
+
 ## Equivalents of common netcat commands
 
 Check reachability without exchanging data:
@@ -276,7 +343,8 @@ p2p-nc relay --help
 2. Logical port `8080` becomes the libp2p protocol
    `/p2p-netcat/1.0.0/8080`.
 3. The server publishes a provider record for its PeerId CID to the Amino DHT.
-4. The client searches known addresses, mDNS, that provider record, and the DHT.
+4. The client searches known addresses, mDNS, signed GossipSub announcements,
+   that provider record, and the DHT.
 5. With `--relay`, it builds a `relay/p2p-circuit/p2p/server` route.
 6. Without an explicit route, a direct Trystero/WebRTC channel is attempted in
    parallel.
@@ -299,13 +367,15 @@ QUIC streams, avoiding unnecessary HTTP request, header, and CONNECT semantics.
   option is to pass the same `--relay` to both the server and client.
 - WebRTC improves direct connectivity, but symmetric NAT or blocked UDP may
   still require TURN or Circuit Relay; public trackers provide no SLA.
+- PubSub improves discovery only after a node reaches a compatible mesh member;
+  it is not a global rendezvous service.
 - An IPFS HTTP gateway is not a relay and cannot carry this protocol.
 - Networks that block UDP automatically fall back to TCP when both addresses
   are known; `--no-quic` disables QUIC explicitly.
 - In `-k` mode without `-e`, shared stdin is inconvenient for concurrent
   clients; incoming streams are limited to one active session.
-- PeerId allowlist authorization, SOCKS/TCP forwarding, and datagram mode are
-  natural next steps, but they are not implemented in this MVP.
+- PeerId allowlist authorization and datagram mode are natural next steps, but
+  they are not implemented in this version.
 
 ## Development
 

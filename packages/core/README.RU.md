@@ -16,7 +16,9 @@ JavaScript-клиентами.
 - валидацию relay-адресов;
 - построение Circuit Relay dial plan;
 - определение browser-compatible адресов;
-- единый порядок предпочтения транспортов.
+- единый порядок предпочтения транспортов;
+- общую тему и интервал PubSub discovery;
+- общий пул STUN-серверов WebRTC.
 
 Создание libp2p-узла, DHT, Web Worker RPC и stdin/stdout остаются в платформенных
 пакетах.
@@ -35,6 +37,10 @@ JavaScript-клиентами.
 | `browserDialableAddress(address, options)` | Проверяет пригодность адреса для браузера |
 | `addressRank(address)` | Возвращает числовой приоритет транспорта |
 | `preferDialAddresses(a, b)` | Comparator для сортировки multiaddr |
+| `PUBSUB_DISCOVERY_TOPIC` | Отдельная GossipSub-тема discovery приложения |
+| `PUBSUB_DISCOVERY_INTERVAL_MS` | Интервал повторной публикации объявления |
+| `DEFAULT_STUN_URLS` | Неизменяемый общий список STUN URL |
+| `defaultRtcConfiguration()` | Возвращает новую WebRTC-конфигурацию с общим STUN-пулом |
 | `trysteroRoomId(peerId, service)` | Строит детерминированную WebRTC room |
 | `trysteroAuthPayload(...)` | Строит подписываемый challenge с domain separation |
 | `encodeTrysteroAuthResponse(...)` | Кодирует публичный ключ и подпись |
@@ -44,6 +50,12 @@ JavaScript-клиентами.
 Приоритет сортировки: WebRTC Direct, QUIC v1, WebTransport, WSS, WS, TCP,
 прочие адреса и Circuit Relay. Наличие позиции в общем рейтинге не означает,
 что конкретная платформа реализует соответствующий транспорт.
+
+`defaultRtcConfiguration()` каждый раз возвращает новый объект, поскольку
+реализации WebRTC могут нормализовать или изменять конфигурацию. Сейчас пул
+содержит пять Google STUN endpoint, а также CounterPath, Sipgate, VoIPBuster и
+InternetCalls. STUN помогает определить NAT mapping, но не является TURN relay
+и не гарантирует прямое соединение через symmetric или жёсткий NAT.
 
 CLI и Web Worker подключают библиотеку как локальную npm-зависимость. Для CLI
 используется путь `file:packages/core`, для веб-проекта —

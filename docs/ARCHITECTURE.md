@@ -32,9 +32,10 @@ flowchart TB
 ```
 
 The browser-safe core package owns validation, protocol-ID construction,
-multiaddr normalization, relay route planning, browser address checks, and
-transport ranking. Node creation, DHT access, stdin/stdout, IndexedDB, and
-Worker RPC remain in their platform adapters.
+multiaddr normalization, relay route planning, browser address checks,
+transport ranking, the PubSub topic, and the WebRTC STUN pool. Node creation,
+DHT access, stdin/stdout, IndexedDB, and Worker RPC remain in their platform
+adapters.
 
 The CLI supplies persistent identities, TCP/QUIC, mDNS, Amino DHT, stream
 bridging, command execution, and relay-server mode. React owns the browser UI;
@@ -57,7 +58,8 @@ system TCP or UDP ports.
 
 1. Validate the logical port and load or create the persistent key.
 2. Create a libp2p node with QUIC v1, TCP, WebSocket, Circuit Relay v2, Noise,
-   Yamux, identify, ping, mDNS, bootstrap discovery, and Amino DHT.
+   Yamux, identify, ping, mDNS, signed GossipSub peer discovery, bootstrap
+   discovery, and Amino DHT.
 3. Register a handler for the selected p2p-netcat protocol ID.
 4. Print PeerId and current multiaddrs to stderr.
 5. Publish a provider record for the listener's PeerId CID. Publication has a
@@ -75,7 +77,8 @@ PeerId. The secure libp2p handshake performs the final identity verification.
 2. With `--relay`, the first configured relay becomes
    `relay/p2p-circuit/p2p/targetPeerId`.
 3. Otherwise, the client checks its peer store, which can contain information
-   learned through mDNS, bootstrap, identify, or an earlier query.
+   learned through mDNS, signed GossipSub announcements, bootstrap, identify,
+   or an earlier query.
 4. It searches for a provider record of the target PeerId CID, with up to four
    seconds per attempt.
 5. It then runs Amino DHT `findPeer`, also with up to four seconds per attempt.
@@ -91,24 +94,28 @@ actually implements.
 The UI exchanges `start`, `connect`, `send`, `closeWrite`, and `stop` RPC
 messages with the Worker. ArrayBuffers are transferred rather than cloned.
 The Worker uses WebTransport, WebSocket, Circuit Relay v2, Noise, Yamux,
-bootstrap discovery, and Amino DHT client mode.
+signed GossipSub peer discovery, bootstrap discovery, and Amino DHT client
+mode.
 
 When the manual relay field is empty:
 
 1. Read the last successful route from IndexedDB. Entries expire after 24
    hours; a cached route gets a six-second dial attempt.
-2. Load static `network-config.json`, falling back to an embedded configuration.
-3. Query every delegated routing endpoint for both `peers/{PeerId}` and
+2. Continuously accept valid p2p-netcat GossipSub announcements into the peer
+   store while the other discovery branches run.
+3. Load static `network-config.json`, falling back to an embedded configuration.
+4. Query every delegated routing endpoint for both `peers/{PeerId}` and
    `providers/{PeerId-CID}`. Those HTTP requests run concurrently with an
    eight-second timeout each.
-4. If delegated routing returns no browser-usable address, query the provider
-   record and then `findPeer` through Amino DHT for up to 20 seconds.
-5. Keep WebTransport and WS/WSS addresses only. An HTTPS page rejects insecure
+5. If delegated routing returns no browser-usable address, check the peer store,
+   query the provider record, and then run `findPeer` through Amino DHT for up
+   to 20 seconds.
+6. Keep WebTransport and WS/WSS addresses only. An HTTPS page rejects insecure
    WS; ordinary TCP and Node.js QUIC addresses are not browser-dialable.
-6. Add optional WSS relay routes from `network-config.json`.
-7. Start `dialProtocol()` for all candidate routes concurrently. `Promise.any`
+7. Add optional WSS relay routes from `network-config.json`.
+8. Start `dialProtocol()` for all candidate routes concurrently. `Promise.any`
    selects the first successful stream and AbortControllers cancel the losers.
-8. Cache the winning multiaddr in IndexedDB for the next session.
+9. Cache the winning multiaddr in IndexedDB for the next session.
 
 Delegated Routing and DHT are sequential fallback layers. The dial attempts for
 the resulting candidate multiaddrs are the parallel part.
@@ -121,9 +128,33 @@ domain-separated transcript with its persistent Ed25519 key; the client checks
 the signature and derives the expected PeerId from the supplied public key.
 The first authenticated libp2p or WebRTC channel cancels the losing attempt.
 
+Both Trystero adapters receive the same ICE configuration from the core
+package. It contains nine `stun:` URLs: five Google endpoints plus CounterPath,
+Sipgate, VoIPBuster, and InternetCalls. STUN exposes public NAT mappings to the
+WebRTC stack; no p2p-netcat payload is sent through a STUN server.
+
 If a manual relay is supplied, automatic discovery is skipped. The core package
 requires a relay PeerId, WS/WSS transport, and WSS for an HTTPS page, then builds
 the final Circuit Relay route.
+
+## PubSub discovery model
+
+CLI nodes, relays, and the browser Worker subscribe to
+`io.github.santaklouse.p2p-netcat.peer-discovery.v1`. Every ten seconds,
+`@libp2p/pubsub-peer-discovery` publishes the node public key and current
+multiaddrs. GossipSub uses `StrictSign` by default. The discovery decoder derives
+the advertised PeerId from the embedded public key, while the GossipSub envelope
+authenticates its publisher. Discovery is still not a trust anchor: a malicious
+publisher can advertise an unusable route, but the final Noise/QUIC handshake
+must prove ownership of the requested PeerId before a stream is accepted.
+
+PubSub is deliberately additive. It does not bootstrap a disconnected node and
+does not make PeerId lookup globally guaranteed: an announcement propagates
+only through connected subscribers that carry the same application topic.
+Generic public IPFS bootstrap nodes are not required to carry that topic. The
+CLI option `--no-pubsub` disables this branch. A p2p-netcat relay participates
+by default and can therefore forward announcements between already connected
+clients.
 
 ## Secure channel and data flow
 
@@ -134,9 +165,17 @@ encrypter is Noise. Yamux carries the selected logical-port stream.
 
 Application data is an unframed byte stream—there is no JSON envelope or line
 protocol. CLI sending and receiving run concurrently and honor backpressure.
-EOF closes the write side after the optional `-q` delay while receiving can
+EOF closes the write side after the optional `--quit-delay` while receiving can
 continue. The browser reads files as streams and transfers each chunk to the
 Worker.
+
+gs-netcat-style adapter modes sit above the same authenticated stream. Client
+`-p` creates a local TCP listener and opens one P2P stream per socket. Listener
+`-d/-p` bridges each stream to a TCP destination; `-S` parses SOCKS4/4a/5 before
+dialing the requested destination. Interactive `-i` frames PTY data and resize
+events, while `node-pty` owns the server pseudoterminal. Tor `-T` disables all
+direct and UDP discovery paths and re-executes a relay-only client under
+`torsocks`.
 
 A relay carries the already protected libp2p channel. It can observe PeerIds,
 addresses, timing, and volume, but not application bytes. DHT and delegated
@@ -161,6 +200,10 @@ unless the peer is locally reachable.
 - Browsers cannot dial ordinary TCP or Node.js QUIC multiaddrs.
 - WebRTC cannot guarantee traversal of symmetric NAT; without reachable TURN,
   Circuit Relay remains the fallback.
+- STUN services may observe source addresses and timing; they provide no SLA and
+  do not relay traffic.
+- PubSub discovery needs an already reachable compatible mesh member and is not
+  a global rendezvous service.
 - Public WebTorrent trackers may be unavailable and provide no SLA.
 - Public IPFS peers do not guarantee arbitrary Circuit Relay capacity.
 - There is no PeerId allowlist or application authorization layer yet.
@@ -172,12 +215,15 @@ unless the peer is locally reachable.
 
 | File | Responsibility |
 |---|---|
-| `packages/core/src/index.js` | Validation, protocol IDs, relay plans, address ranking |
+| `packages/core/src/index.js` | Validation, protocol IDs, relay plans, discovery constants, STUN pool |
 | `src/identity.js` | CLI Ed25519 identity storage |
-| `src/node.js` | Node.js libp2p construction |
-| `src/relay.js` | Public `p2p-netcat/relay` lifecycle API |
+| `src/node.js` | Node.js libp2p and signed PubSub discovery construction |
+| `src/relay.js` | Public `@santaklouse/p2p-netcat/relay` lifecycle API |
 | `src/discovery.js` | CLI DHT publication and PeerId resolution |
+| `src/forwarding.js` | TCP forwarding, SOCKS4/4a/5, and local listeners |
+| `src/pty.js` | Interactive PTY framing, raw client, and login shell |
 | `src/session.js` | Bidirectional streams, backpressure, and `-e` |
+| `src/tor.js` | Tor option detection and isolated torsocks re-exec |
 | `src/cli.js` | CLI commands and lifecycle |
 | `web/app/p2p-client.ts` | React-to-Worker RPC |
 | `web/app/p2p.worker.ts` | Browser libp2p, discovery, route race, and cache |

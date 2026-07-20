@@ -5,7 +5,7 @@
 The Node.js package exposes a dedicated relay entrypoint:
 
 ```js
-import { startRelay } from 'p2p-netcat/relay'
+import { startRelay } from '@santaklouse/p2p-netcat/relay'
 ```
 
 This entrypoint is Node-only. It is not part of the browser-safe
@@ -16,7 +16,7 @@ This entrypoint is Node-only. It is not part of the browser-safe
 After publishing the current package version:
 
 ```bash
-npm install p2p-netcat
+npm install @santaklouse/p2p-netcat
 ```
 
 Inside this repository, npm workspaces resolve the same entrypoint without an
@@ -25,7 +25,7 @@ additional package installation.
 ## Complete example
 
 ```js
-import { startRelay } from 'p2p-netcat/relay'
+import { startRelay } from '@santaklouse/p2p-netcat/relay'
 
 const announce = (process.env.P2P_RELAY_ANNOUNCE ?? '')
   .split(',')
@@ -38,6 +38,7 @@ const relay = await startRelay({
   websocketPort: 9091,
   announce,
   enableMdns: false,
+  enablePubsub: true,
   enableQuic: true
 })
 
@@ -72,7 +73,14 @@ call `process.exit()`.
 | `ipVersion` | both | Set to `4` or `6` to restrict listeners. |
 | `announce` | `[]` | Public multiaddrs announced instead of relying only on observed/interface addresses. |
 | `enableMdns` | `true` | Enables LAN discovery. |
+| `enablePubsub` | `true` | Enables signed GossipSub peer announcements on the p2p-netcat topic. |
 | `enableQuic` | `true` | Enables QUIC v1 in addition to TCP. |
+
+With PubSub enabled, the relay also acts as a compatible discovery mesh member.
+It can forward signed peer announcements between connected p2p-netcat nodes;
+it is still not a central directory, and nodes must first have a route to at
+least one member of the same GossipSub mesh. Set `enablePubsub: false` to run a
+relay without this discovery role.
 
 The returned handle contains:
 

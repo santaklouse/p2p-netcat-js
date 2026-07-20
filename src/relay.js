@@ -18,6 +18,7 @@ export async function startRelay ({
   ipVersion,
   announce = [],
   enableMdns = true,
+  enablePubsub = true,
   enableQuic = true
 } = {}) {
   if (ipVersion !== undefined && ipVersion !== 4 && ipVersion !== 6) {
@@ -37,6 +38,7 @@ export async function startRelay ({
     bootstrapPeers: [],
     enableDht: false,
     enableMdns,
+    enablePubsub,
     enableQuic,
     relayServer: true
   })

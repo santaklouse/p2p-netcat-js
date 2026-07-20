@@ -15,7 +15,9 @@ The package owns:
 - relay address validation;
 - Circuit Relay dial-plan construction;
 - browser-compatible address detection;
-- a shared transport preference order.
+- a shared transport preference order;
+- the application PubSub discovery topic and interval;
+- the common WebRTC STUN pool.
 
 Creating a libp2p node, querying the DHT, Web Worker RPC, and stdin/stdout remain
 in platform-specific packages.
@@ -34,6 +36,10 @@ in platform-specific packages.
 | `browserDialableAddress(address, options)` | Checks whether a browser can dial an address |
 | `addressRank(address)` | Returns a numeric transport rank |
 | `preferDialAddresses(a, b)` | Comparator for sorting multiaddrs |
+| `PUBSUB_DISCOVERY_TOPIC` | App-specific GossipSub discovery topic |
+| `PUBSUB_DISCOVERY_INTERVAL_MS` | Announcement repeat interval |
+| `DEFAULT_STUN_URLS` | Immutable shared STUN URL list |
+| `defaultRtcConfiguration()` | Returns a fresh WebRTC configuration using the shared STUN pool |
 | `trysteroRoomId(peerId, service)` | Builds the deterministic WebRTC room |
 | `trysteroAuthPayload(...)` | Builds a domain-separated signed challenge |
 | `encodeTrysteroAuthResponse(...)` | Encodes the public key and signature |
@@ -43,6 +49,12 @@ in platform-specific packages.
 The order is WebRTC Direct, QUIC v1, WebTransport, WSS, WS, TCP, other
 addresses, and Circuit Relay. A transport appearing in the common ranking does
 not imply that every runtime implements it.
+
+`defaultRtcConfiguration()` returns a fresh object on every call because WebRTC
+implementations may normalize or mutate their configuration. The current pool
+contains the five Google STUN endpoints plus CounterPath, Sipgate, VoIPBuster,
+and InternetCalls. STUN discovers NAT mappings; it is not a TURN relay and
+cannot guarantee a direct route through symmetric or restrictive NATs.
 
 The CLI and Web Worker use the library as a local npm dependency. The CLI path
 is `file:packages/core`; the web project uses `file:../packages/core`.

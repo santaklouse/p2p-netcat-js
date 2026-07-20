@@ -39,6 +39,7 @@ async function p2pToOutput (stream, output, onActivity = () => {}) {
 export async function bridgeSession (stream, {
   input = process.stdin,
   output = process.stdout,
+  remoteInput = stream,
   closeOutput = false,
   closeDelayMs = 0,
   inactivityTimeoutMs = 0
@@ -54,7 +55,7 @@ export async function bridgeSession (stream, {
   onActivity()
 
   const sending = inputToP2P(input, stream, closeDelayMs, onActivity)
-  const receiving = p2pToOutput(stream, output, onActivity)
+  const receiving = p2pToOutput(remoteInput, output, onActivity)
 
   try {
     await Promise.all([sending, receiving])

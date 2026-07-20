@@ -5,6 +5,15 @@ export const PROTOCOL_PREFIX: "/p2p-netcat/1.0.0";
 export const DEFAULT_SERVICE: 31337;
 export const TRYSTERO_APP_ID: "io.github.santaklouse.p2p-netcat.v1";
 export const TRYSTERO_AUTH_VERSION: 1;
+export const PUBSUB_DISCOVERY_TOPIC: "io.github.santaklouse.p2p-netcat.peer-discovery.v1";
+export const PUBSUB_DISCOVERY_INTERVAL_MS: 10000;
+export const DEFAULT_STUN_URLS: readonly string[];
+
+export type P2PNetcatRtcConfiguration = {
+  iceServers: Array<{ urls: string[] }>;
+};
+
+export function defaultRtcConfiguration(): P2PNetcatRtcConfiguration;
 
 export type RelayValidationOptions = {
   requireWebSocket?: boolean;

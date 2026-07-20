@@ -7,11 +7,18 @@ import { yamux } from '@chainsafe/libp2p-yamux'
 import { circuitRelayServer, circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 import { identify } from '@libp2p/identify'
 import { ping } from '@libp2p/ping'
+import { gossipsub } from '@libp2p/gossipsub'
+import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
 import { bootstrap } from '@libp2p/bootstrap'
 import { mdns } from '@libp2p/mdns'
 import { kadDHT, removePrivateAddressesMapper } from '@libp2p/kad-dht'
 import { multiaddr } from '@multiformats/multiaddr'
-import { normalizeRelayAddress, preferDialAddresses } from '@santaklouse/p2p-netcat-core'
+import {
+  PUBSUB_DISCOVERY_INTERVAL_MS,
+  PUBSUB_DISCOVERY_TOPIC,
+  normalizeRelayAddress,
+  preferDialAddresses
+} from '@santaklouse/p2p-netcat-core'
 import { APP_VERSION, IPFS_BOOTSTRAP_PEERS } from './constants.js'
 
 export async function createP2PNode ({
@@ -24,6 +31,8 @@ export async function createP2PNode ({
   bootstrapPeers = IPFS_BOOTSTRAP_PEERS,
   enableDht = true,
   enableMdns = true,
+  enablePubsub = true,
+  pubsubIntervalMs = PUBSUB_DISCOVERY_INTERVAL_MS,
   enableQuic = true,
   relayServer = false,
   dhtServer = false,
@@ -58,10 +67,24 @@ export async function createP2PNode ({
   if (bootstrapPeers.length > 0) {
     peerDiscovery.push(bootstrap({ list: bootstrapPeers, timeout: 10_000 }))
   }
+  if (enablePubsub) {
+    peerDiscovery.push(pubsubPeerDiscovery({
+      interval: pubsubIntervalMs,
+      topics: [PUBSUB_DISCOVERY_TOPIC]
+    }))
+  }
 
   const services = {
     identify: identify({ agentVersion: `p2p-netcat/${APP_VERSION}` }),
     ping: ping()
+  }
+
+  if (enablePubsub) {
+    services.pubsub = gossipsub({
+      // GossipSub uses StrictSign by default, cryptographically binding every
+      // announcement to its author before peer-discovery decodes it.
+      allowPublishToZeroTopicPeers: true
+    })
   }
 
   if (enableDht) {

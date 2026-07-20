@@ -5,6 +5,7 @@ import { getRelaySockets, joinRoom, pauseRelayReconnection } from '@trystero-p2p
 import {
   TRYSTERO_APP_ID,
   TrysteroStream,
+  defaultRtcConfiguration,
   decodeTrysteroAuthResponse,
   encodeTrysteroAuthResponse,
   trysteroAuthPayload,
@@ -26,6 +27,7 @@ function roomConfig () {
   return {
     appId: TRYSTERO_APP_ID,
     rtcPolyfill: RTCPeerConnection,
+    rtcConfig: defaultRtcConfiguration(),
     relayConfig: {
       warnOnRelayFailure: false
     }
