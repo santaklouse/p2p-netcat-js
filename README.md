@@ -1,0 +1,234 @@
+# p2p-netcat
+
+**English** | [Русский](README.RU.md)
+
+`p2p-nc` is a JavaScript command-line utility inspired by `netcat`. Instead of
+the server's IP address, it uses a cryptographic libp2p `PeerId`. Its transport
+is compatible with the IPFS networking stack: QUIC v1, TCP, Noise, Yamux, IPFS
+Amino DHT, mDNS, and Circuit Relay v2.
+
+## What already works
+
+- Bidirectional, binary-transparent stdin/stdout transfer;
+- QUIC v1 as the preferred direct transport, with automatic TCP fallback;
+- A stable server PeerId derived from a local Ed25519 key;
+- Logical ports, allowing one PeerId to expose multiple services;
+- PeerId-only discovery on a LAN through mDNS and over the internet through the
+  IPFS Amino DHT;
+- Circuit Relay v2 connections for nodes behind NAT;
+- A built-in relay mode;
+- `-l`, `-k`, `-w`, `-q`, `-z`, `-e`, `-p`, `-4`, `-6`, and verbose mode;
+- Authenticated encryption through QUIC TLS 1.3 or Noise, including connections
+  through a relay.
+
+Netcat-style UDP datagram mode (`-u`) is deliberately rejected for now. QUIC
+does use UDP underneath, but it still provides a reliable, ordered stream.
+
+## Installation
+
+Node.js 22 or newer is required. The QUIC transport uses a native N-API module
+with prebuilt binaries for mainstream macOS, Linux, and Windows platforms.
+
+```bash
+npm install
+npm link
+```
+
+After `npm link`, both commands are available: `p2p-nc` and the shorter `pnc`.
+
+QUIC is enabled by default. Use `--no-quic` only for diagnostics or on a system
+where the native QUIC module is unavailable. The `-p` option uses the same
+numeric port for TCP and UDP; when it is `0`, the operating system chooses each
+port independently.
+
+## Quick start
+
+On the first computer:
+
+```bash
+p2p-nc -l 8080
+```
+
+The command prints the persistent PeerId to `stderr`, for example:
+
+```text
+[p2p-nc] слушатель:8080 PeerId: 12D3KooWLs9pvVfwbo6yHsYB66kRLq2RJwfH3bBQZhp94kerbFd9
+```
+
+On the second computer, copy the printed PeerId and run:
+
+```bash
+p2p-nc 12D3KooWLs9pvVfwbo6yHsYB66kRLq2RJwfH3bBQZhp94kerbFd9 8080
+```
+
+Once connected, everything typed in either terminal is sent to the other one.
+The PeerId above is illustrative: the connection command must contain the value
+printed by your own listener.
+
+To print the PeerId without starting a listener:
+
+```bash
+p2p-nc id
+```
+
+The server key is created at `~/.config/p2p-netcat/identity.key` with `0600`
+permissions. Deleting the key creates a new PeerId. The client identity is
+ephemeral unless `--identity` is supplied explicitly.
+
+## Verifiable local example without manual copying
+
+The following commands run entirely on one computer:
+
+```bash
+DEMO_KEY=/tmp/p2p-netcat-demo.key
+DEMO_ID="$(p2p-nc id --identity "$DEMO_KEY")"
+p2p-nc -l 8080 --identity "$DEMO_KEY" > /tmp/p2p-netcat-received.txt &
+DEMO_PID=$!
+sleep 2
+printf 'hello over PeerId\n' | p2p-nc "$DEMO_ID" 8080
+wait "$DEMO_PID"
+cat /tmp/p2p-netcat-received.txt
+```
+
+## Nodes behind NAT: running your own relay
+
+The public IPFS DHT is used for discovery, but public IPFS nodes do not promise
+unlimited relaying of arbitrary streams. For predictable connectivity between
+two nodes behind NAT, run a relay once on a VPS with both TCP and UDP port 9090
+open:
+
+```bash
+p2p-nc relay -4 -p 9090 \
+  --announce /ip4/203.0.113.10/udp/9090/quic-v1 \
+  --announce /ip4/203.0.113.10/tcp/9090
+```
+
+In a real command, `--announce` must contain the VPS's public address. The relay
+prints its complete multiaddr. Assume it prints:
+
+```text
+/ip4/203.0.113.10/udp/9090/quic-v1/p2p/12D3KooWK4bicbvfPNGzfuMBf6xE43ecgB26NHDZRTfLM7CNh9yw
+/ip4/203.0.113.10/tcp/9090/p2p/12D3KooWK4bicbvfPNGzfuMBf6xE43ecgB26NHDZRTfLM7CNh9yw
+```
+
+Server behind NAT:
+
+```bash
+p2p-nc -l 8080 --relay /ip4/203.0.113.10/udp/9090/quic-v1/p2p/12D3KooWK4bicbvfPNGzfuMBf6xE43ecgB26NHDZRTfLM7CNh9yw
+```
+
+The client behind NAT uses the same relay but addresses the server only by its
+PeerId:
+
+```bash
+p2p-nc --relay /ip4/203.0.113.10/udp/9090/quic-v1/p2p/12D3KooWK4bicbvfPNGzfuMBf6xE43ecgB26NHDZRTfLM7CNh9yw 12D3KooWJ7satLo5LXjhSZBMVTWRG1AZ77sQYtX81qHHf2VtscdL 8080
+```
+
+Traffic between the client and server remains end-to-end encrypted. The relay
+can see the participants' PeerIds and traffic volume and timing, but it cannot
+read the contents.
+
+## Browser PWA client
+
+The `web` directory contains a fully static React client without SSR, API
+routes, a database, or server-side scripts. The libp2p networking stack runs in
+a Web Worker. A Service Worker caches the application shell for offline PWA
+startup and updates it in the background. The page includes a terminal widget,
+text and file transfer, EOF, and binary-stream download.
+
+Build the static files:
+
+```bash
+cd web
+npm install
+npm run build
+```
+
+The result is written to `web/dist` and can be placed on any HTTPS static file
+host; the application needs no backend. Opening it through `file://` is not a
+supported mode because browsers require a secure context—HTTPS or `localhost`—
+for Service Workers and PWA installation.
+
+A ready-to-use `.github/workflows/pages.yml` workflow is included for GitHub
+Pages. In the repository settings, select **Settings → Pages → Source → GitHub
+Actions**. The workflow automatically uses the repository subpath as Vite's
+base URL.
+
+The relay needs a WebSocket transport for browser clients:
+
+```bash
+p2p-nc relay -4 -p 9090 --websocket-port 9091
+```
+
+Locally, use the printed address containing `/tcp/9091/ws/p2p/`. When the page
+is hosted on HTTPS, publish the relay over WSS, typically through a TLS reverse
+proxy on port 443. See [`web/README.md`](web/README.md) for the complete guide.
+
+## Equivalents of common netcat commands
+
+Check reachability without exchanging data:
+
+```bash
+p2p-nc -z -v 12D3KooWLs9pvVfwbo6yHsYB66kRLq2RJwfH3bBQZhp94kerbFd9 8080
+```
+
+Transfer a file:
+
+```bash
+p2p-nc -l 9000 > received.tar.gz
+p2p-nc 12D3KooWLs9pvVfwbo6yHsYB66kRLq2RJwfH3bBQZhp94kerbFd9 9000 < archive.tar.gz
+```
+
+Run a command for each connection:
+
+```bash
+p2p-nc -l -k 7000 -e '/bin/sh -i'
+```
+
+The `-e` option gives the connected user the privileges of the local process.
+Use it only with trusted PeerIds and inside an isolated environment.
+
+Complete command reference:
+
+```bash
+p2p-nc --help
+p2p-nc relay --help
+```
+
+## How a connection is established
+
+1. The listener loads its persistent key; the hash of the public key becomes
+   its PeerId.
+2. Logical port `8080` becomes the libp2p protocol
+   `/p2p-netcat/1.0.0/8080`.
+3. The server publishes a provider record for its PeerId CID to the Amino DHT.
+4. The client searches known addresses, mDNS, that provider record, and the DHT.
+5. With `--relay`, it builds a `relay/p2p-circuit/p2p/server` route.
+6. QUIC TLS 1.3 or Noise authenticates the PeerIds and establishes encryption.
+7. stdin/stdout is transferred as a raw byte stream with backpressure.
+
+HTTP/3 is not part of the application protocol. Direct peers use raw libp2p
+QUIC streams, avoiding unnecessary HTTP request, header, and CONNECT semantics.
+
+## Practical MVP limitations
+
+- PeerId-only internet connections work after a provider record containing a
+  public or relayed server address has been published. The first publication
+  may take about a minute; `-v` reports when it succeeds.
+- Servers behind CGNAT must use an available Circuit Relay v2. The most reliable
+  option is to pass the same `--relay` to both the server and client.
+- An IPFS HTTP gateway is not a relay and cannot carry this protocol.
+- Networks that block UDP automatically fall back to TCP when both addresses
+  are known; `--no-quic` disables QUIC explicitly.
+- In `-k` mode without `-e`, shared stdin is inconvenient for concurrent
+  clients; incoming streams are limited to one active session.
+- PeerId allowlist authorization, SOCKS/TCP forwarding, and datagram mode are
+  natural next steps, but they are not implemented in this MVP.
+
+## Development
+
+```bash
+npm test
+npm run lint
+cd web && npm test && npm run lint
+```

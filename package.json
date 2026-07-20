@@ -1,0 +1,37 @@
+{
+  "name": "p2p-netcat",
+  "version": "0.1.0",
+  "description": "TCP/QUIC netcat-like CLI addressed by libp2p PeerId instead of IP",
+  "type": "module",
+  "bin": {
+    "p2p-nc": "./bin/p2p-nc.js",
+    "pnc": "./bin/p2p-nc.js"
+  },
+  "scripts": {
+    "start": "node ./bin/p2p-nc.js",
+    "test": "node --test",
+    "lint": "node --check ./bin/p2p-nc.js && node --check ./src/cli.js && node --check ./src/node.js && node --check ./src/session.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@chainsafe/libp2p-noise": "^17.0.0",
+    "@chainsafe/libp2p-quic": "^2.1.1",
+    "@chainsafe/libp2p-yamux": "^8.0.1",
+    "@libp2p/bootstrap": "^12.0.27",
+    "@libp2p/circuit-relay-v2": "^4.2.9",
+    "@libp2p/crypto": "^5.1.13",
+    "@libp2p/identify": "^4.1.10",
+    "@libp2p/kad-dht": "^16.4.0",
+    "@libp2p/mdns": "^12.0.27",
+    "@libp2p/peer-id": "^6.0.4",
+    "@libp2p/ping": "^3.1.9",
+    "@libp2p/tcp": "^11.0.24",
+    "@libp2p/websockets": "^10.1.17",
+    "@multiformats/multiaddr": "^13.0.1",
+    "commander": "^14.0.0",
+    "libp2p": "^3.3.6"
+  }
+}

@@ -1,0 +1,293 @@
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { BrowserP2PClient } from "./p2p-client";
+
+type ConnectionState = "idle" | "starting" | "connecting" | "connected" | "closed" | "error";
+type LogEntry = { id: number; time: string; message: string; kind: "info" | "success" | "error" };
+
+const stateLabels: Record<ConnectionState, string> = {
+  idle: "Готов",
+  starting: "Запуск узла",
+  connecting: "Соединение",
+  connected: "В сети",
+  closed: "Закрыто",
+  error: "Ошибка",
+};
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} Б`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} КБ`;
+  return `${(value / 1024 / 1024).toFixed(1)} МБ`;
+}
+
+export default function Home() {
+  const [targetPeerId, setTargetPeerId] = useState("");
+  const [relayAddress, setRelayAddress] = useState("");
+  const [logicalPort, setLogicalPort] = useState(31337);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
+  const [localPeerId, setLocalPeerId] = useState("");
+  const [message, setMessage] = useState("");
+  const [terminal, setTerminal] = useState("");
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [receivedBytes, setReceivedBytes] = useState(0);
+  const [sentBytes, setSentBytes] = useState(0);
+  const [fileProgress, setFileProgress] = useState("");
+  const clientRef = useRef<BrowserP2PClient | null>(null);
+  const receivedChunks = useRef<ArrayBuffer[]>([]);
+  const decoder = useRef(new TextDecoder());
+  const terminalRef = useRef<HTMLPreElement | null>(null);
+
+  const addLog = (text: string, kind: "info" | "success" | "error" = "info") => {
+    setLogs((current) => [
+      ...current.slice(-99),
+      { id: Date.now() + Math.random(), time: new Date().toLocaleTimeString("ru-RU"), message: text, kind },
+    ]);
+  };
+
+  useEffect(() => {
+    const savedRelay = window.localStorage.getItem("p2p-netcat-relay");
+    if (savedRelay) setRelayAddress(savedRelay);
+    return () => {
+      void clientRef.current?.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    terminalRef.current?.scrollTo({ top: terminalRef.current.scrollHeight, behavior: "smooth" });
+  }, [terminal]);
+
+  const connect = async (event: FormEvent) => {
+    event.preventDefault();
+    if (connectionState === "connecting" || connectionState === "starting") return;
+
+    setConnectionState("starting");
+    setTerminal("");
+    setReceivedBytes(0);
+    setSentBytes(0);
+    receivedChunks.current = [];
+
+    const client = new BrowserP2PClient({
+      onData: (bytes) => {
+        receivedChunks.current.push(bytes.slice().buffer as ArrayBuffer);
+        setReceivedBytes((value) => value + bytes.byteLength);
+        setTerminal((value) => value + decoder.current.decode(bytes, { stream: true }));
+      },
+      onLog: addLog,
+      onClosed: () => setConnectionState((state) => state === "error" ? state : "closed"),
+    });
+    clientRef.current = client;
+
+    try {
+      setLocalPeerId(await client.start());
+      setConnectionState("connecting");
+      window.localStorage.setItem("p2p-netcat-relay", relayAddress.trim());
+      await client.connect(targetPeerId, logicalPort, relayAddress);
+      setConnectionState("connected");
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      addLog(text, "error");
+      setConnectionState("error");
+      await client.stop();
+      clientRef.current = null;
+    }
+  };
+
+  const disconnect = async () => {
+    await clientRef.current?.stop();
+    clientRef.current = null;
+    setConnectionState("closed");
+    addLog("Соединение закрыто");
+  };
+
+  const sendMessage = async () => {
+    if (!message || connectionState !== "connected") return;
+    try {
+      const payload = `${message}\n`;
+      await clientRef.current?.sendText(payload);
+      setSentBytes((value) => value + new TextEncoder().encode(payload).byteLength);
+      setMessage("");
+    } catch (error) {
+      addLog(error instanceof Error ? error.message : String(error), "error");
+    }
+  };
+
+  const sendFile = async (file: File | undefined) => {
+    if (!file || connectionState !== "connected") return;
+    setFileProgress(`Отправка ${file.name}: 0 / ${formatBytes(file.size)}`);
+    try {
+      await clientRef.current?.sendFile(file, (sent, total) => {
+        setFileProgress(`Отправка ${file.name}: ${formatBytes(sent)} / ${formatBytes(total)}`);
+      });
+      setSentBytes((value) => value + file.size);
+      setFileProgress(`${file.name} отправлен · ${formatBytes(file.size)}`);
+      addLog(`Файл ${file.name} отправлен`, "success");
+    } catch (error) {
+      setFileProgress("");
+      addLog(error instanceof Error ? error.message : String(error), "error");
+    }
+  };
+
+  const downloadReceived = () => {
+    const blob = new Blob(receivedChunks.current, { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `p2p-netcat-${new Date().toISOString().replaceAll(":", "-")}.bin`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const connected = connectionState === "connected";
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <a className="brand" href="#top" aria-label="p2p netcat — начало страницы">
+          <span className="brand-mark" aria-hidden="true">p2p</span>
+          <span>netcat<span className="brand-cursor">_</span></span>
+        </a>
+        <div className={`connection-pill state-${connectionState}`}>
+          <span className="status-dot" aria-hidden="true" />
+          {stateLabels[connectionState]}
+        </div>
+      </header>
+
+      <section className="hero" id="top">
+        <div>
+          <p className="eyebrow">Зашифрованный поток · без IP-адреса сервера</p>
+          <h1>Терминал между двумя узлами.<br /><span>Прямо из браузера.</span></h1>
+        </div>
+        <p className="hero-copy">
+          Подключайтесь к CLI-серверу по его PeerId через Circuit Relay v2.
+          Noise шифрует канал от браузера до конечного узла.
+        </p>
+      </section>
+
+      <section className="workspace" aria-label="P2P-клиент">
+        <aside className="connection-panel">
+          <div className="panel-heading">
+            <span className="step-number">01</span>
+            <div><p>Маршрут</p><h2>Новое соединение</h2></div>
+          </div>
+
+          <form onSubmit={connect} className="connection-form">
+            <label>
+              <span>PeerId сервера</span>
+              <input
+                value={targetPeerId}
+                onChange={(event) => setTargetPeerId(event.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+                required
+                disabled={connected}
+                aria-describedby="peer-help"
+              />
+              <small id="peer-help">Значение печатает команда <code>p2p-nc -l</code></small>
+            </label>
+
+            <label>
+              <span>WebSocket relay multiaddr</span>
+              <input
+                value={relayAddress}
+                onChange={(event) => setRelayAddress(event.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+                required
+                disabled={connected}
+                aria-describedby="relay-help"
+              />
+              <small id="relay-help">Локально — <code>/ip4/127.0.0.1/tcp/9091/ws/p2p/…</code></small>
+            </label>
+
+            <label className="port-field">
+              <span>Логический порт</span>
+              <input
+                type="number"
+                min="1"
+                max="65535"
+                value={logicalPort}
+                onChange={(event) => setLogicalPort(Number(event.target.value))}
+                required
+                disabled={connected}
+              />
+            </label>
+
+            {!connected ? (
+              <button className="primary-button" type="submit" disabled={!targetPeerId || !relayAddress || connectionState === "starting" || connectionState === "connecting"}>
+                <span>Подключиться</span><span aria-hidden="true">↗</span>
+              </button>
+            ) : (
+              <button className="secondary-button danger" type="button" onClick={disconnect}>Отключиться</button>
+            )}
+          </form>
+
+          <div className="identity-card">
+            <span>Браузерный PeerId</span>
+            <code>{localPeerId || "Будет создан при подключении"}</code>
+          </div>
+
+          <div className="security-note">
+            <span className="lock-icon" aria-hidden="true">◆</span>
+            <p><strong>Сквозное шифрование</strong>Relay видит участников и объём трафика, но не содержимое.</p>
+          </div>
+        </aside>
+
+        <div className="terminal-panel">
+          <div className="terminal-toolbar">
+            <div className="window-dots" aria-hidden="true"><i /><i /><i /></div>
+            <span>p2p://{targetPeerId ? `${targetPeerId.slice(0, 12)}…` : "not-connected"}:{logicalPort}</span>
+            <div className="traffic-stats">
+              <span>↑ {formatBytes(sentBytes)}</span><span>↓ {formatBytes(receivedBytes)}</span>
+            </div>
+          </div>
+
+          <pre className="terminal-output" ref={terminalRef} aria-live="polite">
+            {terminal || <span className="terminal-empty">Ожидание данных…{`\n`}После соединения вывод удалённого процесса появится здесь.</span>}
+          </pre>
+
+          <div className="composer">
+            <textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  void sendMessage();
+                }
+              }}
+              disabled={!connected}
+              aria-label="Данные для отправки"
+              rows={3}
+            />
+            <button type="button" className="send-button" disabled={!connected || !message} onClick={() => void sendMessage()}>
+              Отправить <kbd>⌘↵</kbd>
+            </button>
+          </div>
+
+          <div className="transfer-bar">
+            <label className={`file-button ${!connected ? "disabled" : ""}`}>
+              <input type="file" disabled={!connected} onChange={(event) => void sendFile(event.target.files?.[0])} />
+              <span aria-hidden="true">＋</span> Отправить файл
+            </label>
+            <button type="button" disabled={!connected} onClick={() => void clientRef.current?.closeWrite()}>Отправить EOF</button>
+            <button type="button" disabled={receivedBytes === 0} onClick={downloadReceived}>Скачать приём</button>
+            {fileProgress && <span className="file-progress">{fileProgress}</span>}
+          </div>
+        </div>
+      </section>
+
+      <section className="event-log" aria-label="Журнал соединения">
+        <div className="log-header"><span className="step-number">02</span><h2>Журнал событий</h2><button type="button" onClick={() => setLogs([])}>Очистить</button></div>
+        <div className="log-list">
+          {logs.length === 0 ? <p className="empty-log">Событий пока нет.</p> : logs.map((entry) => (
+            <p key={entry.id} className={`log-${entry.kind}`}><time>{entry.time}</time><span>{entry.message}</span></p>
+          ))}
+        </div>
+      </section>
+
+      <footer>
+        <p>p2p-netcat web <span>v0.1.0</span></p>
+        <p>WebSocket · Circuit Relay v2 · Noise · Yamux</p>
+      </footer>
+    </main>
+  );
+}
