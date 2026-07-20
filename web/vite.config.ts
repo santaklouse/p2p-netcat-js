@@ -43,7 +43,7 @@ export default defineConfig(() => {
           clientsClaim: true,
           skipWaiting: true,
           navigateFallback: asset("index.html"),
-          globPatterns: ["**/*.{html,js,css,png,webmanifest}"],
+          globPatterns: ["**/*.{html,js,css,json,png,webmanifest}"],
           runtimeCaching: [
             {
               urlPattern: ({ request }) => request.mode === "navigate",

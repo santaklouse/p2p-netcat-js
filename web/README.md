@@ -1,35 +1,59 @@
 # p2p-netcat web
 
-Статический браузерный клиент для `p2p-netcat`. В проекте нет SSR, API routes,
-базы данных и серверных скриптов: production-сборка состоит только из HTML,
-CSS, JavaScript, Web Worker, Service Worker, manifest и изображений.
+**English** | [Русский](README.RU.md)
 
-## Возможности
+The complete interaction between the core package, CLI, browser discovery, and
+secure stream is documented in
+[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
 
-- подключение к CLI-серверу по `PeerId` и логическому порту;
-- WebSocket/WSS-транспорт через libp2p Circuit Relay v2;
-- Noise-шифрование и Yamux внутри отдельного Web Worker;
-- терминальный виджет для текста и бинарного вывода;
-- отправка текста, файлов и EOF, сохранение принятых байтов в файл;
-- устанавливаемая PWA с офлайн-кешем интерфейса и автообновлением Service Worker;
-- адаптивный интерфейс для компьютера, планшета и телефона.
+A fully static browser client for `p2p-netcat`. The project has no SSR, API
+routes, database, or server-side scripts. Its production build contains only
+HTML, CSS, JavaScript, a Web Worker, a Service Worker, a manifest, and images.
 
-## Архитектура
+## Features
 
-Web Worker импортирует browser-safe пакет
-[`@santaklouse/p2p-netcat-core`](../packages/core), который одновременно использует CLI.
-Общими являются protocol ID, проверка PeerId и логического порта, правила
-WS/WSS и построение Circuit Relay dial plan. В самом веб-проекте остаются только
-libp2p WebSocket-транспорт, обмен сообщениями с Worker, терминальный интерфейс и
-PWA/Service Worker. Серверного JavaScript-кода у этой архитектуры нет.
+- connection to a CLI server by `PeerId` and logical port;
+- automatic lookup through HTTP Delegated Routing and IPFS Amino DHT;
+- WebTransport or WebSocket/WSS through libp2p Circuit Relay v2;
+- an optional manual relay multiaddr as an emergency override;
+- Noise encryption and Yamux inside a dedicated Web Worker;
+- a terminal widget for text and binary output;
+- text, file, and EOF sending, plus received-byte download;
+- an installable PWA with offline UI caching and Service Worker auto-update;
+- responsive desktop, tablet, and mobile layouts.
 
-Файл `.npmrc` включает `install-links=true`: благодаря этому локальный пакет
-копируется в `node_modules` при `npm ci`, и чистая сборка GitHub Actions не
-зависит от заранее установленных пакетов в корне репозитория.
+## Architecture
 
-## Установка и сборка
+The Web Worker imports the browser-safe
+[`@santaklouse/p2p-netcat-core`](../packages/core) package also used by the CLI.
+Protocol IDs, PeerId and logical-port validation, WS/WSS rules, and Circuit
+Relay dial-plan construction are shared. Delegated Routing, the DHT client,
+libp2p WebTransport/WebSocket transports, Worker messaging, the terminal UI,
+and the PWA/Service Worker remain in the web project. This architecture runs no
+server-side JavaScript.
 
-Требуется Node.js 22.13 или новее.
+When the relay field is empty, the Worker first resolves the PeerId through
+`https://delegated-ipfs.dev/routing/v1` and then uses DHT as a fallback. A
+successful route is cached in IndexedDB for 24 hours and checked first on the
+next connection. `public/network-config.json` can add compatible routing
+endpoints and a hidden WSS relay pool without changing the UI:
+
+```json
+{
+  "delegatedRouting": [
+    "https://delegated-ipfs.dev/routing/v1"
+  ],
+  "relays": []
+}
+```
+
+The `.npmrc` file enables `install-links=true`. This copies the local package
+into `node_modules` during `npm ci`, so a clean GitHub Actions build does not
+depend on packages previously installed at the repository root.
+
+## Installation and build
+
+Node.js 22.13 or newer is required.
 
 ```bash
 cd web
@@ -38,11 +62,10 @@ npm run lint
 npm run build
 ```
 
-Готовый автономный статический пакет находится в `web/dist`. Его можно
-разместить на любом HTTPS-хостинге статических файлов: backend для приложения
-не требуется.
+The complete standalone static output is written to `web/dist`. It can be
+deployed to any HTTPS static-file host; the application does not need a backend.
 
-Для разработки:
+For development:
 
 ```bash
 cd web
@@ -51,64 +74,67 @@ npm run dev
 
 ## GitHub Pages
 
-В корне репозитория уже находится workflow `.github/workflows/pages.yml`. Он
-проверяет TypeScript, собирает только каталог `web`, автоматически вычисляет
-базовый путь из имени GitHub-репозитория и публикует содержимое `web/dist`.
+The repository already contains `.github/workflows/pages.yml`. It checks
+TypeScript, builds only the `web` directory, derives the Vite base path from the
+GitHub repository name, and publishes `web/dist`.
 
-После загрузки репозитория откройте **Settings → Pages** и выберите
-**Build and deployment → Source → GitHub Actions**. После следующего push в
-ветку `main` страница будет опубликована автоматически. Для репозитория
-`santaklouse/p2p-netcat-js` ожидаемый адрес:
+After pushing the repository, open **Settings → Pages** and select
+**Build and deployment → Source → GitHub Actions**. The next push to `main`
+publishes the page automatically. For `santaklouse/p2p-netcat-js`, the expected
+URL is:
 
 ```text
 https://santaklouse.github.io/p2p-netcat-js/
 ```
 
-GitHub Pages предоставляет HTTPS, поэтому Service Worker и установка PWA будут
-работать. Сам P2P relay при этом тоже должен быть доступен через WSS.
+GitHub Pages supplies HTTPS, allowing the Service Worker, PWA installation,
+Delegated Routing, and secure WSS/WebTransport routes to work.
 
-## Проверяемый локальный маршрут
+## Verifiable manual relay route
 
-В первом терминале запустите relay с отдельным WebSocket-портом:
+The relay field is optional. This example tests the explicit fallback locally
+when automatic discovery cannot use the CLI server's TCP/QUIC address.
+
+Start a relay with a separate WebSocket port in the first terminal:
 
 ```bash
 p2p-nc relay -4 -p 9090 --websocket-port 9091
 ```
 
-Скопируйте напечатанный адрес, который содержит `/tcp/9091/ws/p2p/`. Во втором
-терминале запустите сервер и передайте ему этот адрес через `--relay`:
+Copy the printed address containing `/tcp/9091/ws/p2p/`. Start the server in a
+second terminal and pass that address through `--relay`:
 
 ```bash
 p2p-nc -l 31337 --relay /ip4/127.0.0.1/tcp/9091/ws/p2p/12D3KooWEqeQRAJ61HSv9yMPk8yzjke7NxmTFcvFt4GzwXxzVjXW
 ```
 
-В веб-интерфейсе укажите PeerId, напечатанный сервером, логический порт `31337`
-и тот же WebSocket relay multiaddr.
+Enter the server PeerId and logical port `31337` in the web UI. Then expand
+“Additional relay” and enter the same WebSocket relay multiaddr.
 
-PeerId в команде выше относится к проверочному ключу разработчика. При обычном
-запуске relay напечатает другой PeerId — всегда используйте фактически
-напечатанный полный адрес.
+The PeerId in the command above belongs to a development test key. A normal
+relay run prints a different PeerId—always use the complete address that your
+running relay actually prints.
 
-## HTTPS, WSS и запуск без backend
+## HTTPS, WSS, and running without a backend
 
-Service Worker и установка PWA доступны только в secure context: на HTTPS или
-на `localhost`. Поэтому открытие `dist/index.html` через `file://` не является
-поддерживаемым режимом браузеров. Это ограничение безопасности браузера, а не
-потребность приложения в серверной логике.
+Service Workers and PWA installation require a secure context: HTTPS or
+`localhost`. Opening `dist/index.html` through `file://` is therefore not a
+supported browser mode. This is a browser security restriction, not a need for
+application server logic.
 
-При размещении страницы по HTTPS relay должен быть доступен по WSS. Обычно TLS
-завершается на статическом reverse proxy/CDN, который проксирует WebSocket на
-порт `9091`, а публичный multiaddr имеет вид:
+When a manual relay is used from an HTTPS page, it must be available through
+WSS. TLS normally terminates at a static reverse proxy or CDN that forwards
+WebSocket traffic to port `9091`. The public multiaddr then has this form:
 
 ```text
 /dns4/p2p.example.com/tcp/443/wss/p2p/12D3KooWEqeQRAJ61HSv9yMPk8yzjke7NxmTFcvFt4GzwXxzVjXW
 ```
 
-Веб-приложение само не принимает HTTP-запросы и не выполняет серверный код.
-После первой загрузки оболочка интерфейса доступна офлайн; для P2P-сеанса,
-разумеется, требуется сеть и доступный relay.
+The web application itself accepts no HTTP requests and executes no server
+code. After the first load, the UI shell is available offline. A P2P session
+still requires network access and at least one browser-dialable route.
 
-## Проверка
+## Verification
 
 ```bash
 cd web

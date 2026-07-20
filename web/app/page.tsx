@@ -79,7 +79,8 @@ export default function Home() {
     try {
       setLocalPeerId(await client.start());
       setConnectionState("connecting");
-      window.localStorage.setItem("p2p-netcat-relay", relayAddress.trim());
+      if (relayAddress.trim()) window.localStorage.setItem("p2p-netcat-relay", relayAddress.trim());
+      else window.localStorage.removeItem("p2p-netcat-relay");
       await client.connect(targetPeerId, logicalPort, relayAddress);
       setConnectionState("connected");
     } catch (error) {
@@ -157,8 +158,8 @@ export default function Home() {
           <h1>Терминал между двумя узлами.<br /><span>Прямо из браузера.</span></h1>
         </div>
         <p className="hero-copy">
-          Подключайтесь к CLI-серверу по его PeerId через Circuit Relay v2.
-          Noise шифрует канал от браузера до конечного узла.
+          Введите PeerId — клиент сам найдёт браузерный маршрут через IPFS.
+          Circuit Relay можно указать вручную только как резервный маршрут.
         </p>
       </section>
 
@@ -184,19 +185,25 @@ export default function Home() {
               <small id="peer-help">Значение печатает команда <code>p2p-nc -l</code></small>
             </label>
 
-            <label>
-              <span>WebSocket relay multiaddr</span>
-              <input
-                value={relayAddress}
-                onChange={(event) => setRelayAddress(event.target.value)}
-                spellCheck={false}
-                autoComplete="off"
-                required
-                disabled={connected}
-                aria-describedby="relay-help"
-              />
-              <small id="relay-help">Локально — <code>/ip4/127.0.0.1/tcp/9091/ws/p2p/…</code></small>
-            </label>
+            <details className="relay-options">
+              <summary>
+                <span>Дополнительный relay</span>
+                <small>{relayAddress ? "Маршрут задан вручную" : "Необязательно · используется автопоиск"}</small>
+              </summary>
+              <label>
+                <span>WebSocket relay multiaddr</span>
+                <input
+                  value={relayAddress}
+                  onChange={(event) => setRelayAddress(event.target.value)}
+                  spellCheck={false}
+                  autoComplete="off"
+                  disabled={connected}
+                  placeholder="Оставьте пустым для автоматического поиска"
+                  aria-describedby="relay-help"
+                />
+                <small id="relay-help">Если автопоиск не сработал: <code>/dns4/relay.example/tcp/443/wss/p2p/…</code></small>
+              </label>
+            </details>
 
             <label className="port-field">
               <span>Логический порт</span>
@@ -212,7 +219,7 @@ export default function Home() {
             </label>
 
             {!connected ? (
-              <button className="primary-button" type="submit" disabled={!targetPeerId || !relayAddress || connectionState === "starting" || connectionState === "connecting"}>
+              <button className="primary-button" type="submit" disabled={!targetPeerId || connectionState === "starting" || connectionState === "connecting"}>
                 <span>Подключиться</span><span aria-hidden="true">↗</span>
               </button>
             ) : (
@@ -227,7 +234,7 @@ export default function Home() {
 
           <div className="security-note">
             <span className="lock-icon" aria-hidden="true">◆</span>
-            <p><strong>Сквозное шифрование</strong>Relay видит участников и объём трафика, но не содержимое.</p>
+            <p><strong>Сквозное шифрование</strong>Службы поиска видят запрос PeerId, но содержимое канала защищено Noise.</p>
           </div>
         </aside>
 
@@ -286,7 +293,7 @@ export default function Home() {
 
       <footer>
         <p>p2p-netcat web <span>v0.1.0</span></p>
-        <p>WebSocket · Circuit Relay v2 · Noise · Yamux</p>
+        <p>Delegated Routing · IPFS DHT · WSS · Noise · Yamux</p>
       </footer>
     </main>
   );

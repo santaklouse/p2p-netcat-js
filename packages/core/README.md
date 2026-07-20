@@ -1,26 +1,48 @@
 # @santaklouse/p2p-netcat-core
 
-Общее browser-safe ядро `p2p-netcat`. Пакет не использует Node.js API и может
-импортироваться одновременно консольным приложением, Web Worker и другими
-JavaScript-клиентами.
+**English** | [Русский](README.RU.md)
 
-Пакет отвечает за:
+The interaction between the library, CLI, and browser Worker is documented in
+[`docs/ARCHITECTURE.md`](https://github.com/santaklouse/p2p-netcat-js/blob/main/docs/ARCHITECTURE.md).
 
-- логические порты и protocol ID;
-- нормализацию PeerId и multiaddr;
-- валидацию relay-адресов;
-- построение Circuit Relay dial plan;
-- определение browser-compatible адресов;
-- единый порядок предпочтения транспортов.
+The browser-safe shared core of `p2p-netcat`. The package does not use Node.js
+APIs and can be imported by the CLI, a Web Worker, and other JavaScript clients.
 
-Создание libp2p-узла, DHT, Web Worker RPC и stdin/stdout остаются в платформенных
-пакетах.
+The package owns:
 
-CLI и Web Worker подключают библиотеку как локальную npm-зависимость. Для CLI
-используется путь `file:packages/core`, для веб-проекта —
-`file:../packages/core`.
+- logical ports and protocol IDs;
+- PeerId and multiaddr normalization;
+- relay address validation;
+- Circuit Relay dial-plan construction;
+- browser-compatible address detection;
+- a shared transport preference order.
 
-Пример использования общего плана подключения:
+Creating a libp2p node, querying the DHT, Web Worker RPC, and stdin/stdout remain
+in platform-specific packages.
+
+## Exported API
+
+| Function | Purpose |
+|---|---|
+| `validateService(value)` | Validates a logical port in the `1..65535` range |
+| `protocolForService(service)` | Builds `/p2p-netcat/1.0.0/{service}` |
+| `normalizePeerId(value)` | Validates and canonicalizes a PeerId |
+| `normalizeMultiaddr(value)` | Validates and canonicalizes a multiaddr |
+| `normalizeRelayAddress(value, options)` | Applies relay, WS/WSS, and secure-context checks |
+| `relayedTargetAddress(relay, peerId, options)` | Returns the target Circuit Relay multiaddr |
+| `createRelayDialPlan(input)` | Returns an immutable dial plan |
+| `browserDialableAddress(address, options)` | Checks whether a browser can dial an address |
+| `addressRank(address)` | Returns a numeric transport rank |
+| `preferDialAddresses(a, b)` | Comparator for sorting multiaddrs |
+
+The order is WebRTC Direct, QUIC v1, WebTransport, WSS, WS, TCP, other
+addresses, and Circuit Relay. A transport appearing in the common ranking does
+not imply that every runtime implements it.
+
+The CLI and Web Worker use the library as a local npm dependency. The CLI path
+is `file:packages/core`; the web project uses `file:../packages/core`.
+
+Example of constructing a shared dial plan:
 
 ```js
 import { createRelayDialPlan } from '@santaklouse/p2p-netcat-core'

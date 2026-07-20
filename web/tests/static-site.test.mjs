@@ -3,16 +3,18 @@ import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 test("собирается как статическая PWA без серверного бандла", async () => {
-  const [html, manifest, files] = await Promise.all([
+  const [html, manifest, files, networkConfig] = await Promise.all([
     readFile(new URL("../dist/index.html", import.meta.url), "utf8"),
     readFile(new URL("../dist/manifest.webmanifest", import.meta.url), "utf8"),
     readdir(new URL("../dist/", import.meta.url)),
+    readFile(new URL("../dist/network-config.json", import.meta.url), "utf8"),
   ]);
 
   assert.match(html, /p2p-netcat web/);
   assert.match(html, /manifest\.webmanifest/);
   assert.doesNotMatch(html, /%BASE_URL%/);
   assert.ok(files.includes("sw.js"));
+  assert.deepEqual(JSON.parse(networkConfig).delegatedRouting, ["https://delegated-ipfs.dev/routing/v1"]);
   const parsedManifest = JSON.parse(manifest);
   assert.equal(parsedManifest.display, "standalone");
   assert.equal(parsedManifest.start_url, parsedManifest.scope);
@@ -21,10 +23,11 @@ test("собирается как статическая PWA без сервер
 });
 
 test("сетевой стек работает в отдельном Web Worker", async () => {
-  const [worker, client, core] = await Promise.all([
+  const [worker, client, core, page] = await Promise.all([
     readFile(new URL("../app/p2p.worker.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/p2p-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../../packages/core/src/index.js", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(worker, /@santaklouse\/p2p-netcat-core/);
@@ -32,6 +35,12 @@ test("сетевой стек работает в отдельном Web Worker"
   assert.match(core, /\/p2p-netcat\/1\.0\.0/);
   assert.match(worker, /circuitRelayTransport\(\)/);
   assert.match(worker, /webSockets\(\)/);
+  assert.match(worker, /webTransport\(\)/);
+  assert.match(worker, /delegated-ipfs\.dev\/routing\/v1/);
+  assert.match(worker, /kadDHT\(/);
+  assert.match(worker, /indexedDB\.open/);
   assert.match(client, /new Worker\(new URL/);
   assert.match(client, /transfer/);
+  assert.match(page, /Необязательно · используется автопоиск/);
+  assert.doesNotMatch(page, /!targetPeerId \|\| !relayAddress/);
 });

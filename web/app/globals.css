@@ -57,6 +57,14 @@ code, pre, kbd { font-family: "SFMono-Regular", Consolas, "Liberation Mono", mon
 .connection-form code { color: var(--ink); }
 .connection-form input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-radius: 0; background: #fff; padding: 10px 12px; outline: none; font: 12px/1.3 "SFMono-Regular", monospace; transition: border .16s, box-shadow .16s; }
 .connection-form input:focus { border-color: var(--ink); box-shadow: 3px 3px 0 var(--lime); }
+.relay-options { border: 1px dashed var(--line); padding: 0 12px; }
+.relay-options summary { min-height: 45px; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.relay-options summary::-webkit-details-marker { display: none; }
+.relay-options summary::before { content: "+"; color: #71840b; font: 700 15px/1 "SFMono-Regular", monospace; }
+.relay-options[open] summary::before { content: "−"; }
+.relay-options summary > span { font-weight: 650; font-size: 12px; }
+.relay-options summary > small { margin-left: auto; text-align: right; }
+.relay-options > label { border-top: 1px dashed var(--line); padding: 13px 0 14px; }
 .port-field { max-width: 155px; }
 .primary-button, .secondary-button { min-height: 49px; border: 1px solid var(--ink); padding: 0 16px; display: flex; justify-content: space-between; align-items: center; font-weight: 750; }
 .primary-button { background: var(--lime); color: var(--ink); box-shadow: 4px 4px 0 var(--ink); transition: transform .15s, box-shadow .15s; }

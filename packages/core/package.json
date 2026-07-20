@@ -12,7 +12,8 @@
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "README.RU.md"
   ],
   "scripts": {
     "test": "node --test",

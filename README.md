@@ -7,6 +7,16 @@ the server's IP address, it uses a cryptographic libp2p `PeerId`. Its transport
 is compatible with the IPFS networking stack: QUIC v1, TCP, Noise, Yamux, IPFS
 Amino DHT, mDNS, and Circuit Relay v2.
 
+## Documentation
+
+- [Detailed architecture and connection algorithm](docs/ARCHITECTURE.md) —
+  identity, discovery, route selection, CLI, browser, relay, encryption,
+  backpressure, and failure handling;
+- [Browser PWA guide](web/README.md) — build, GitHub Pages,
+  `network-config.json`, and WSS relay configuration;
+- [Shared JavaScript library API](packages/core/README.md) — exported functions
+  from `@santaklouse/p2p-netcat-core`.
+
 ## What already works
 
 - Bidirectional, binary-transparent stdin/stdout transfer;
@@ -162,15 +172,22 @@ Pages. In the repository settings, select **Settings → Pages → Source → Gi
 Actions**. The workflow automatically uses the repository subpath as Vite's
 base URL.
 
-The relay needs a WebSocket transport for browser clients:
+The browser does not require a relay address by default. It queries HTTP
+Delegated Routing first, falls back to the IPFS Amino DHT when no suitable
+address is returned, keeps only browser-usable WSS/WebTransport/Circuit Relay
+routes, and dials the resulting candidates concurrently.
+
+If the server advertises only TCP/QUIC addresses or automatic discovery cannot
+find a usable route, expand the advanced settings and provide a WebSocket relay:
 
 ```bash
 p2p-nc relay -4 -p 9090 --websocket-port 9091
 ```
 
-Locally, use the printed address containing `/tcp/9091/ws/p2p/`. When the page
-is hosted on HTTPS, publish the relay over WSS, typically through a TLS reverse
-proxy on port 443. See [`web/README.md`](web/README.md) for the complete guide.
+Locally, the browser can use the printed address containing
+`/tcp/9091/ws/p2p/`. When the page is hosted on HTTPS, publish the relay over
+WSS, typically through a TLS reverse proxy on port 443. See
+[`web/README.md`](web/README.md) for the complete guide.
 
 ## Shared JavaScript library
 
@@ -240,6 +257,10 @@ p2p-nc relay --help
 5. With `--relay`, it builds a `relay/p2p-circuit/p2p/server` route.
 6. QUIC TLS 1.3 or Noise authenticates the PeerIds and establishes encryption.
 7. stdin/stdout is transferred as a raw byte stream with backpressure.
+
+The [architecture document](docs/ARCHITECTURE.md) describes every CLI and
+browser branch, timeout, cache, concurrent address race, and trust boundary in
+detail.
 
 HTTP/3 is not part of the application protocol. Direct peers use raw libp2p
 QUIC streams, avoiding unnecessary HTTP request, header, and CONNECT semantics.
